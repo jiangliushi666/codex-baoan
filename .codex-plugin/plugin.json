@@ -11,11 +11,11 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Codex 保安",
-    "shortDescription": "GUI monitor for Codex commands, responses, and risky behavior.",
-    "longDescription": "Codex 保安 provides a clean local GUI audit layer for Codex CLI and Codex app sessions. It offers one-click protection, visible logs, dynamic workspace scope, risky command detection, and optional blocking when routed through supported guard paths.",
+    "shortDescription": "Desktop monitor for Codex commands, responses, and risky behavior.",
+    "longDescription": "Codex 保安 provides a ccswitch-style desktop audit layer for Codex CLI and Codex app sessions. It offers one-click protection, automatic provider discovery, visible logs, dynamic workspace scope, risky command detection, and optional blocking when routed through supported guard paths.",
     "developerName": "Local developer",
     "category": "Developer Tools",
-    "capabilities": ["Local GUI", "Local monitoring", "Policy checks", "Model proxy capture"],
+    "capabilities": ["Desktop app", "Provider discovery", "Local monitoring", "Policy checks", "Model proxy capture"],
     "defaultPrompt": [
       "Start a guarded Codex session for this repo.",
       "Inspect whether this command is risky.",

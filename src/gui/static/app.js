@@ -47,11 +47,11 @@ function render(state) {
   const running = Boolean(proxy.running || watcher.running);
   nodes.configPath.textContent = state.configPath;
   nodes.quickToggleButton.textContent = running ? "x" : "+";
-  nodes.quickToggleButton.title = running ? "Stop protection" : "Start recommended protection";
-  nodes.guardState.textContent = proxy.running ? "Attached" : watcher.running ? "Watching process" : "Not attached";
-  nodes.guardDetail.textContent = proxy.running ? (proxy.providerName || proxy.upstream || "Local proxy is running") : discovery.manualFallback.reason;
-  nodes.subtitleText.textContent = discovery.providers.length ? "Found " + discovery.providers.length + " config sources" : "Waiting for a usable source";
-  nodes.providerSummary.textContent = discovery.providers.length ? "Pick a row to route Codex traffic through the local guard. Keys stay server-side." : "No source was found. Use fallback settings once.";
+  nodes.quickToggleButton.title = running ? "停止保护" : "启用推荐保护";
+  nodes.guardState.textContent = proxy.running ? "已接管" : watcher.running ? "正在监控" : "未接管";
+  nodes.guardDetail.textContent = proxy.running ? (proxy.providerName || proxy.upstream || "本地代理运行中") : discoveryReason(discovery);
+  nodes.subtitleText.textContent = discovery.providers.length ? "已发现 " + discovery.providers.length + " 个上游" : "等待可用来源";
+  nodes.providerSummary.textContent = discovery.providers.length ? "选择一行即可把 Codex 流量接入本地保护，密钥不会显示在界面里。" : "没有发现可用来源，请打开备用设置。";
   renderSourcePills(discovery.sources || []);
   renderProviderList(nodes.providerList, discovery.providers || []);
   renderProviderList(nodes.ccswitchList, (discovery.providers || []).filter((provider) => provider.source === "ccswitch"));
@@ -64,7 +64,7 @@ function renderSourcePills(sources) {
   for (const source of sources) {
     const pill = document.createElement("span");
     pill.className = "source-pill " + source.status;
-    pill.textContent = source.label + " - " + (source.status === "ok" ? source.providerCount : source.status === "missing" ? "missing" : "error");
+    pill.textContent = source.label + " · " + (source.status === "ok" ? source.providerCount : source.status === "missing" ? "未找到" : "错误");
     nodes.sourcePills.append(pill);
   }
 }
@@ -74,7 +74,7 @@ function renderProviderList(container, providers) {
   if (!providers.length) {
     const empty = document.createElement("article");
     empty.className = "switch-row empty-row";
-    empty.innerHTML = "<div class='row-icon muted-icon'>-</div><div class='row-main'><div class='row-titleline'><h3>No source here</h3></div><p>Use fallback settings when discovery cannot read a default path.</p></div>";
+    empty.innerHTML = "<div class='row-icon muted-icon'>-</div><div class='row-main'><div class='row-titleline'><h3>这里没有来源</h3></div><p>自动发现失败时再使用备用设置。</p></div>";
     container.append(empty);
     return;
   }
@@ -89,13 +89,13 @@ function providerRow(provider) {
   row.className = "switch-row provider-row" + (isRunning ? " active" : "") + (provider.isRecommended ? " recommended" : "");
   row.innerHTML = "<div class='drag-handle' aria-hidden='true'>&#8942;&#8942;</div><div class='row-icon " + iconClass(provider.source) + "'>" + iconText(provider.source) + "</div><div class='row-main'><div class='row-titleline'><h3></h3><span class='current-badge'></span></div><p></p><div class='badge-line'></div></div><div class='row-stats'><span></span><span></span></div><button class='row-action' type='button'></button>";
   row.querySelector("h3").textContent = provider.name;
-  row.querySelector(".current-badge").textContent = isRunning ? "Running" : provider.statusText;
+  row.querySelector(".current-badge").textContent = isRunning ? "运行中" : providerStatusText(provider);
   row.querySelector(".current-badge").classList.toggle("off", !selectable);
-  row.querySelector("p").textContent = provider.baseUrl || "No upstream URL configured";
+  row.querySelector("p").textContent = provider.baseUrl || "未配置上游 URL";
   const labels = [];
-  if (provider.isRecommended) labels.push("Recommended");
-  if (provider.isCurrent) labels.push("Current");
-  labels.push(provider.hasApiKey ? "Key read" : "Use existing auth");
+  if (provider.isRecommended) labels.push("推荐");
+  if (provider.isCurrent) labels.push("当前");
+  labels.push(provider.hasApiKey ? "已读取密钥" : "使用现有登录");
   const badgeLine = row.querySelector(".badge-line");
   for (const label of labels) {
     const badge = document.createElement("span");
@@ -107,7 +107,7 @@ function providerRow(provider) {
   stats[0].textContent = provider.sourceLabel;
   stats[1].textContent = provider.model || provider.protocol || provider.category || "Codex";
   const button = row.querySelector("button");
-  button.textContent = isRunning ? "Enabled" : selectable ? "Enable Guard" : "Unavailable";
+  button.textContent = isRunning ? "已启用" : selectable ? "启用" : "不可用";
   button.disabled = isRunning || !selectable;
   button.addEventListener("click", () => startWithProvider(provider.id).catch(showError));
   return row;
@@ -128,13 +128,13 @@ async function startWithProvider(providerId) {
   const values = currentControlValues();
   if (providerId) values.providerId = providerId;
   await api("/api/quick/start", { method: "POST", body: JSON.stringify(values) });
-  showToast("Protection started");
+  showToast("保护已启用");
   await loadState();
 }
 
 async function stopProtection() {
   await api("/api/quick/stop", { method: "POST", body: "{}" });
-  showToast("Protection stopped");
+  showToast("保护已停止");
   await loadState();
 }
 
@@ -147,12 +147,12 @@ function currentControlValues() {
 
 async function inspectCommand() {
   const command = nodes.commandInput.value.trim();
-  if (!command) { showToast("Enter a command first"); return; }
+  if (!command) { showToast("先输入命令"); return; }
   const decision = await api("/api/inspect", { method: "POST", body: JSON.stringify({ command, mode: nodes.modeSelect.value, allow: nodes.allowInput.value }) });
   nodes.inspectBadge.textContent = riskLabel(decision.severity);
   nodes.inspectBadge.className = "soft-badge risk-" + decision.severity;
-  const paths = decision.matchedPaths && decision.matchedPaths.length ? " Paths: " + decision.matchedPaths.join(", ") : "";
-  nodes.decisionText.textContent = (decision.action === "block" ? "Would block. " : "Would allow. ") + decision.message + paths;
+  const paths = decision.matchedPaths && decision.matchedPaths.length ? " 路径：" + decision.matchedPaths.join(", ") : "";
+  nodes.decisionText.textContent = (decision.action === "block" ? "会拦截。" : "会放行。") + decision.message + paths;
 }
 
 async function saveSettings() {
@@ -164,13 +164,13 @@ async function saveSettings() {
   config.appWatcher.processNames = splitLines(nodes.processNamesInput.value).length ? splitLines(nodes.processNamesInput.value) : config.appWatcher.processNames;
   config.appWatcher.killOnBlock = nodes.killOnBlockInput.checked;
   await api("/api/config", { method: "POST", body: JSON.stringify({ config }) });
-  showToast("Settings saved");
+  showToast("设置已保存");
   await loadState();
 }
 
 function renderSessions(sessions) {
   nodes.sessionList.replaceChildren();
-  if (!sessions.length) { nodes.sessionList.innerHTML = "<div class='empty-note'>No session logs.</div>"; nodes.logView.textContent = "No logs yet. Start protection to see recent sessions."; return; }
+  if (!sessions.length) { nodes.sessionList.innerHTML = "<div class='empty-note'>暂无会话日志。</div>"; nodes.logView.textContent = "暂无日志。启用保护后会显示最近会话。"; return; }
   if (!selectedSessionId || !sessions.some((session) => session.id === selectedSessionId)) selectedSessionId = sessions[0].id;
   for (const session of sessions) {
     const button = document.createElement("button");
@@ -186,7 +186,7 @@ function renderSessions(sessions) {
   const selected = sessions.find((session) => session.id === selectedSessionId) || sessions[0];
   const alerts = String(selected.alerts || "").trim();
   const summary = String(selected.summary || "").trim();
-  nodes.logView.textContent = (alerts && !alerts.includes("No alerts recorded yet") ? alerts : "# Alerts\n\nNo high-risk alerts.") + "\n\n" + summary;
+  nodes.logView.textContent = (alerts && !alerts.includes("No alerts recorded yet") ? alerts : "# Alerts\n\n暂无高危告警。") + "\n\n" + summary;
 }
 
 function switchView(name) {
@@ -194,7 +194,15 @@ function switchView(name) {
   for (const entry of Object.entries(nodes.views)) entry[1].classList.toggle("active", entry[0] === name);
 }
 
-function riskLabel(severity) { return ({ info: "No risk", low: "Low", medium: "Medium", high: "High", critical: "Critical" })[severity] || severity; }
+function discoveryReason(discovery) {
+  return discovery.recommendedProviderId ? "已自动发现可用上游。" : "未发现可用上游，请使用备用设置。";
+}
+
+function providerStatusText(provider) {
+  return ({ ready: "可用", "needs-auth": "需要登录", unconfigured: "未配置" })[provider.status] || provider.statusText;
+}
+
+function riskLabel(severity) { return ({ info: "无风险", low: "低", medium: "中", high: "高", critical: "严重" })[severity] || severity; }
 function splitLines(value) { return String(value || "").split(/[\n,;]/).map((item) => item.trim()).filter(Boolean); }
 function showToast(message) { nodes.toast.textContent = message; nodes.toast.classList.add("show"); window.clearTimeout(showToast.timer); showToast.timer = window.setTimeout(() => nodes.toast.classList.remove("show"), 2300); }
 function showError(error) { console.error(error); showToast(error instanceof Error ? error.message : String(error)); }
@@ -204,7 +212,7 @@ function bindEvents() {
   nodes.settingsButton.addEventListener("click", () => nodes.settingsPanel.classList.add("open"));
   nodes.closeSettingsButton.addEventListener("click", () => nodes.settingsPanel.classList.remove("open"));
   nodes.quickToggleButton.addEventListener("click", () => toggleProtection().catch(showError));
-  nodes.refreshButton.addEventListener("click", () => loadState().then(() => showToast("Rescanned")).catch(showError));
+  nodes.refreshButton.addEventListener("click", () => loadState().then(() => showToast("已重新扫描")).catch(showError));
   nodes.inspectButton.addEventListener("click", () => inspectCommand().catch(showError));
   nodes.saveSettingsButton.addEventListener("click", () => saveSettings().catch(showError));
 }

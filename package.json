@@ -3,13 +3,17 @@
   "version": "0.1.0",
   "description": "Codex 保安: external guardrail and monitoring plugin for Codex CLI and Codex app workflows.",
   "type": "module",
+  "main": "desktop/main.cjs",
   "bin": {
     "codex-guard": "./dist/cli.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-gui-assets.mjs",
     "test": "npm run build && node --test \"dist/__tests__/*.test.js\"",
-    "start": "node dist/cli.js gui",
+    "start": "npm run desktop:dev",
+    "desktop": "electron .",
+    "desktop:dev": "npm run build && electron .",
+    "gui": "node dist/cli.js gui",
     "doctor": "node dist/cli.js doctor",
     "install:local": "powershell -NoProfile -ExecutionPolicy Bypass -File ./install.ps1"
   },
@@ -35,6 +39,7 @@
   "devDependencies": {
     "@types/node": "^22.15.30",
     "@types/sql.js": "^1.4.11",
+    "electron": "^42.3.1",
     "typescript": "^5.8.3"
   },
   "dependencies": {

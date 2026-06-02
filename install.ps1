@@ -30,10 +30,11 @@ function Ensure-Node {
   }
 }
 
-function New-Shortcut($ShortcutPath, $TargetPath, $WorkingDirectory) {
+function New-Shortcut($ShortcutPath, $TargetPath, $WorkingDirectory, $Arguments = "") {
   $shell = New-Object -ComObject WScript.Shell
   $shortcut = $shell.CreateShortcut($ShortcutPath)
   $shortcut.TargetPath = $TargetPath
+  $shortcut.Arguments = $Arguments
   $shortcut.WorkingDirectory = $WorkingDirectory
   $shortcut.IconLocation = "$env:SystemRoot\System32\shell32.dll,77"
   $shortcut.Save()
@@ -57,6 +58,9 @@ Write-Step "Installing dependencies"
 Push-Location $InstallDir
 try {
   npm install
+  if (-not (Test-Path (Join-Path  "node_modules\electron\dist\electron.exe"))) {
+    node node_modules\electron\install.js
+  }
   npm run build
 } finally {
   Pop-Location
@@ -66,13 +70,15 @@ Write-Step "Creating shortcuts"
 $Desktop = [Environment]::GetFolderPath("DesktopDirectory")
 $Programs = [Environment]::GetFolderPath("Programs")
 $ShortcutName = "Codex Baoan.lnk"
-New-Shortcut (Join-Path $Desktop $ShortcutName) (Join-Path $InstallDir "Start-Codex-Baoan.cmd") $InstallDir
-New-Shortcut (Join-Path $Programs $ShortcutName) (Join-Path $InstallDir "Start-Codex-Baoan.cmd") $InstallDir
+$VbsLauncher = Join-Path $InstallDir "Start-Codex-Baoan.vbs"
+$Wscript = Join-Path $env:SystemRoot "System32\wscript.exe"
+New-Shortcut (Join-Path $Desktop $ShortcutName) $Wscript $InstallDir (""" + $VbsLauncher + """)
+New-Shortcut (Join-Path $Programs $ShortcutName) $Wscript $InstallDir (""" + $VbsLauncher + """)
 
 Write-Step "Installed successfully"
 Write-Host "Install path: $InstallDir"
 Write-Host "Open from Desktop shortcut: Codex Baoan"
 
 if (-not $NoLaunch) {
-  Start-Process -FilePath (Join-Path $InstallDir "Start-Codex-Baoan.cmd") -WorkingDirectory $InstallDir
+  Start-Process -FilePath $Wscript -ArgumentList (""" + $VbsLauncher + """) -WorkingDirectory $InstallDir -WindowStyle Hidden
 }

@@ -1,136 +1,75 @@
 # Codex 保安
 
-Codex 保安 is an external monitoring layer for Codex CLI and Codex app sessions. It is designed for cases where users route Codex through an unknown OpenAI-compatible model gateway and want visible audit logs plus optional blocking for high-risk behavior.
+Codex 保安是一个给 Codex CLI / Codex App 外挂的桌面监控工具。它面向使用未知模型中转站的普通用户：默认自动读取本机已有配置，一键把 Codex 流量接入本地保护，并把高危行为和模型返回记录成清晰日志。
 
-The first version focuses on a clean local GUI first, with CLI commands kept as the engine underneath:
+第一版按 ccswitch 的桌面应用形态交付：顶部应用切换、provider 大行列表、右上角一键启用、备用设置抽屉、日志面板。正常用户不需要手动输入 Base URL 或 API Key。
 
-- `Install-Codex-Baoan.cmd` installs the app, builds it, creates shortcuts, and launches the GUI on Windows.
-- `Start-Codex-Baoan.cmd` opens the GUI on Windows.
-- `npm start` or `codex-guard gui` opens the local control console in a browser.
-- The GUI has a ccswitch-style layout: auto-discovered provider rows, one-click enable/disable, compact status rows, hidden fallback settings, and visible logs.
-- On startup it reads ccswitch, Codex++, and Codex default config locations before asking for any manual Base URL or API key.
+## 一键安装
 
-The underlying guard paths are:
+Windows 用户下载并双击 Install-Codex-Baoan.cmd。安装器会自动完成：
 
-- `codex-guard run -- <codex args>` wraps Codex CLI, captures stdout/stderr, parses model-emitted command JSON, and watches child process command lines.
-- `codex-guard proxy --target <upstream-base-url>` runs an OpenAI-compatible HTTP proxy that records model requests, full captured model responses, and command-like tool calls in streamed responses.
-- `codex-guard watch-app` watches Codex app related processes and logs command lines from the app process tree.
+- 检查 Node.js，缺失时用 winget 安装 Node.js LTS。
+- 从 https://github.com/jiangliushi666/codex-baoan 下载最新代码。
+- 安装依赖并构建桌面应用。
+- 创建桌面和开始菜单快捷方式。
+- 直接启动 Codex 保安桌面窗口。
 
-## One-Click Install
+也可以在项目目录运行：
 
-For normal Windows users, download `Install-Codex-Baoan.cmd` from this repository and double-click it. The installer will:
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 
-- install Node.js with `winget` when Node is missing,
-- download the latest source from GitHub,
-- install dependencies and build the app,
-- create Desktop and Start Menu shortcuts,
-- launch Codex 保安.
+## 启动
 
-Power users can run the same installer directly:
+普通用户使用桌面快捷方式 Codex Baoan，或双击：
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1
-```
+    Start-Codex-Baoan.vbs
 
-## Start The GUI
+开发者可以运行：
 
-For normal users on Windows, double-click:
+    npm install
+    npm start
 
-```text
-Start-Codex-Baoan.cmd
-```
+npm start 会构建并打开桌面窗口。内部仍有本地后端服务，但它只服务于桌面壳；npm run gui / codex-guard gui --no-open 仅用于调试。
 
-For terminal users:
+## 开箱即用发现
 
-```powershell
-npm install
-npm run build
-npm link
-npm start
-```
+启动后会按顺序读取默认位置：
 
-The GUI opens at `http://127.0.0.1:8790` by default.
+- ccswitch: ~/.cc-switch/cc-switch.db
+- Codex++: ~/.codex-session-delete/settings.json
+- Codex: ~/.codex/config.toml 和 ~/.codex/auth.json
 
-## Codex App Setup
+读取成功时，界面会显示可用 provider 行。点推荐行或右上角 + 即可启用保护。读取失败时，再打开备用设置手动指定上游。
 
-1. Open the GUI.
-2. Pick the recommended provider row or click the orange one-click button.
-3. Codex Baoan reads the upstream Base URL and API key from default local sources when available.
-4. Use fallback settings only when discovery fails or when you want to override the upstream manually.
+## 能监控什么
 
-The default discovery paths are:
+- OpenAI-compatible 模型代理请求、响应和疑似工具命令。
+- Codex CLI stdout/stderr、模型返回中的命令片段、子进程命令行。
+- Codex App 相关进程命令行。
+- 根据当前工作目录、用户 prompt 中出现的路径和额外允许目录动态计算访问范围。
 
-- ccswitch: `~/.cc-switch/cc-switch.db`
-- Codex++: `~/.codex-session-delete/settings.json`
-- Codex config: `~/.codex/config.toml` and `~/.codex/auth.json`
+可配置为仅记录，或在进入代理/CLI wrapper 路径时拦截高危行为。
 
-Keep the GUI open while Codex App is running. Recent alerts and session logs appear inside the GUI.
+## 日志
 
-## CLI Usage
+每个会话写入 .codex-guard/sessions/<session-id>/：
 
-Create a local config in a project:
+- summary.md: 时间线。
+- alerts.md: 高危和严重告警。
+- events.ndjson: 结构化事件。
+- stdout.log / stderr.log: CLI 捕获流。
+- model-response.log: 模型响应捕获。
 
-```powershell
-codex-guard init
-```
+## CLI
 
-Audit a Codex CLI run:
+    codex-guard run -- codex "only edit ./src"
+    codex-guard inspect-command --mode block "Get-Content C:/Users/j/.ssh/id_rsa"
+    codex-guard proxy --mode block --target https://api.openai.com
 
-```powershell
-codex-guard run -- codex "only edit ./src and do not read other folders"
-```
+## 限制
 
-Block configured critical behavior:
+在模型代理或 CLI wrapper 路径里，Codex 保安可以在执行前拦截。对封闭的 Codex App 纯进程监控只能做到发现后记录和可选结束进程，不能保证内核级预执行拦截。
 
-```powershell
-codex-guard run --mode block -- codex "only work in ./src"
-```
+## 开源
 
-Inspect one command without launching Codex:
-
-```powershell
-codex-guard inspect-command --mode block "Get-Content C:/Users/j/.ssh/id_rsa"
-```
-
-Monitor Codex app model traffic by pointing the app or gateway base URL at the local proxy:
-
-```powershell
-codex-guard proxy --mode block --target https://api.openai.com
-```
-
-Then configure the Codex app or model gateway base URL to:
-
-```text
-http://127.0.0.1:8787
-```
-
-## Logs
-
-Each session writes clear, reviewable files under `.codex-guard/sessions/<session-id>/`:
-
-- `summary.md`: human-readable event timeline.
-- `alerts.md`: high and critical findings.
-- `events.ndjson`: structured event log for integrations.
-- `stdout.log` and `stderr.log`: Codex CLI streams when captured.
-- `model-response.log`: captured upstream model responses from the proxy.
-
-## Scope Model
-
-The policy engine does not hard-code one safe directory. It builds scope from:
-
-- the current working directory,
-- `scope.defaultRoots` and `scope.extraAllow` in config,
-- `--allow <path>` flags,
-- explicit path-like text in the user's prompt, such as `./src`, `F:/repo/docs`, or `../shared`.
-
-Commands touching paths outside that scope are logged as medium, high, or critical depending on operation type and path sensitivity. Credential paths such as `.ssh`, `.aws`, `.codex`, `.env`, and private key names are always critical.
-
-## Current Limits
-
-Codex 保安 can reliably block before execution when it is in the execution path, such as the CLI wrapper or model proxy. Pure process watching can detect and optionally kill a process after it appears, but it cannot guarantee pre-execution blocking for a closed Codex app without a native hook or OS-level sandbox driver.
-
-This is why the app path should combine model proxy capture with process watching until Codex app exposes a first-class plugin hook for tool calls.
-
-## Open Source
-
-This project is released under the MIT License.
+MIT License。仓库地址：https://github.com/jiangliushi666/codex-baoan。
