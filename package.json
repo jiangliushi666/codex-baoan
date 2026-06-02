@@ -1,0 +1,32 @@
+{
+  "name": "codex-guard",
+  "version": "0.1.0",
+  "description": "Codex 保安: external guardrail and monitoring plugin for Codex CLI and Codex app workflows.",
+  "type": "module",
+  "bin": {
+    "codex-guard": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-gui-assets.mjs",
+    "test": "npm run build && node --test \"dist/__tests__/*.test.js\"",
+    "start": "node dist/cli.js gui",
+    "doctor": "node dist/cli.js doctor"
+  },
+  "keywords": ["codex", "monitoring", "guardrails", "plugin", "security"],
+  "license": "MIT",
+  "homepage": "https://github.com/jiangliushi666/codex-baoan#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jiangliushi666/codex-baoan.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jiangliushi666/codex-baoan/issues"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "typescript": "^5.8.3"
+  }
+}

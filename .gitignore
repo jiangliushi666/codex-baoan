@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.codex-guard/
+codex-guard.json
+npm-debug.log*

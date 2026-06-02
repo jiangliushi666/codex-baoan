@@ -1,0 +1,26 @@
+{
+  "name": "codex-guard",
+  "version": "0.1.0",
+  "description": "Codex 保安: external monitoring and guardrail plugin for Codex CLI and Codex app workflows.",
+  "author": {
+    "name": "Local developer"
+  },
+  "homepage": "https://github.com/jiangliushi666/codex-baoan#readme",
+  "repository": "https://github.com/jiangliushi666/codex-baoan",
+  "license": "MIT",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Codex 保安",
+    "shortDescription": "GUI monitor for Codex commands, responses, and risky behavior.",
+    "longDescription": "Codex 保安 provides a local GUI audit layer for Codex CLI and Codex app sessions. It records visible logs, derives an allowed workspace scope from the user request, flags risky command behavior, and can optionally block critical actions when routed through supported guard paths.",
+    "developerName": "Local developer",
+    "category": "Developer Tools",
+    "capabilities": ["Local GUI", "Local monitoring", "Policy checks", "Model proxy capture"],
+    "defaultPrompt": [
+      "Start a guarded Codex session for this repo.",
+      "Inspect whether this command is risky.",
+      "Help me configure Codex Guard for the app."
+    ],
+    "brandColor": "#2563EB"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "mode": "audit",
+  "logRoot": ".codex-guard/sessions",
+  "scope": {
+    "defaultRoots": ["."],
+    "extraAllow": [],
+    "deny": []
+  },
+  "risk": {
+    "blockLevels": ["critical"],
+    "allowedNetworkHosts": []
+  },
+  "codexCli": {
+    "executable": "codex",
+    "captureStdout": true,
+    "captureStderr": true,
+    "watchProcessTree": true
+  },
+  "appWatcher": {
+    "processNames": ["codex", "Codex", "codex-app"],
+    "pollIntervalMs": 1000,
+    "killOnBlock": false
+  },
+  "modelProxy": {
+    "listenHost": "127.0.0.1",
+    "port": 8787,
+    "upstreamBaseUrl": "https://api.openai.com",
+    "captureBodies": true,
+    "maxCapturedBodyBytes": 1048576
+  }
+}
