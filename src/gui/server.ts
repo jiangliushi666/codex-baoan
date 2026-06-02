@@ -98,6 +98,12 @@ async function routeRequest(
     if (url.pathname === "/api/proxy/stop" && request.method === "POST") {
       return await stopProxy(response, state);
     }
+    if (url.pathname === "/api/quick/start" && request.method === "POST") {
+      return await quickStart(request, response, options, state);
+    }
+    if (url.pathname === "/api/quick/stop" && request.method === "POST") {
+      return await quickStop(response, state);
+    }
     if (url.pathname === "/api/watcher/start" && request.method === "POST") {
       return await startWatcher(request, response, options, state);
     }
@@ -224,6 +230,92 @@ async function stopProxy(response: ServerResponse, state: RuntimeState): Promise
     message: "Model proxy stopped."
   });
   await closeServer(proxy.server);
+  sendJson(response, { ok: true, running: false });
+}
+
+async function quickStart(
+  request: IncomingMessage,
+  response: ServerResponse,
+  options: GuiServerOptions & { configPath: string },
+  state: RuntimeState
+): Promise<void> {
+  const body = await readJsonBody<{
+    upstream?: string;
+    host?: string;
+    port?: number;
+    mode?: GuardMode;
+    allow?: string;
+    processNames?: string;
+    killOnBlock?: boolean;
+  }>(request);
+  const config = await loadConfig(options.configPath, options.cwd);
+  const mode = body.mode ?? config.mode;
+  const extraAllow = splitList(body.allow);
+
+  if (!state.proxy) {
+    const host = body.host || config.modelProxy.listenHost;
+    const port = Number(body.port || config.modelProxy.port);
+    const upstream = body.upstream || config.modelProxy.upstreamBaseUrl;
+    const logger = await createSessionLogger(config, "quick-proxy", options.cwd);
+    const policyContext = buildPolicyContext(config, { cwd: options.cwd, mode, extraAllow });
+    const server = createOpenAIProxyServer({ config, logger, policyContext, upstreamBaseUrl: upstream, host, port });
+    await listenOpenAIProxyServer(server, host, port);
+    state.proxy = {
+      server,
+      logger,
+      url: `http://${host}:${port}`,
+      upstream,
+      startedAt: new Date().toISOString()
+    };
+    await logger.record({
+      type: "quick.proxy_start",
+      source: "gui",
+      message: `One-click model proxy started at ${state.proxy.url}.`,
+      data: { upstream, mode, allowedRoots: policyContext.allowedRoots }
+    });
+  }
+
+  if (!state.watcher) {
+    const processNames = splitList(body.processNames).length > 0 ? splitList(body.processNames) : config.appWatcher.processNames;
+    const logger = await createSessionLogger(config, "quick-watch", options.cwd);
+    const policyContext = buildPolicyContext(config, { cwd: options.cwd, mode, extraAllow });
+    const handle = await startProcessWatcher({
+      logger,
+      policyContext,
+      processNames,
+      intervalMs: config.appWatcher.pollIntervalMs,
+      killOnBlock: Boolean(body.killOnBlock || config.appWatcher.killOnBlock)
+    });
+    state.watcher = {
+      handle,
+      logger,
+      processNames,
+      startedAt: new Date().toISOString()
+    };
+    await logger.record({
+      type: "quick.watcher_start",
+      source: "gui",
+      message: `One-click app watcher started for ${processNames.join(", ")}.`,
+      data: { mode, allowedRoots: policyContext.allowedRoots }
+    });
+  }
+
+  sendJson(response, { ok: true, state: await getState(options, state) });
+}
+
+async function quickStop(response: ServerResponse, state: RuntimeState): Promise<void> {
+  if (state.proxy) {
+    const proxy = state.proxy;
+    state.proxy = undefined;
+    await proxy.logger.record({ type: "quick.proxy_stop", source: "gui", message: "One-click protection stopped the model proxy." });
+    await closeServer(proxy.server);
+  }
+  if (state.watcher) {
+    const watcher = state.watcher;
+    state.watcher = undefined;
+    watcher.handle.stop();
+    await watcher.logger.record({ type: "quick.watcher_stop", source: "gui", message: "One-click protection stopped the app watcher." });
+  }
   sendJson(response, { ok: true, running: false });
 }
 

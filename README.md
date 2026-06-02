@@ -2,17 +2,34 @@
 
 Codex 保安 is an external monitoring layer for Codex CLI and Codex app sessions. It is designed for cases where users route Codex through an unknown OpenAI-compatible model gateway and want visible audit logs plus optional blocking for high-risk behavior.
 
-The first version focuses on a local GUI first, with CLI commands kept as the engine underneath:
+The first version focuses on a clean local GUI first, with CLI commands kept as the engine underneath:
 
+- `Install-Codex-Baoan.cmd` installs the app, builds it, creates shortcuts, and launches the GUI on Windows.
 - `Start-Codex-Baoan.cmd` opens the GUI on Windows.
 - `npm start` or `codex-guard gui` opens the local control console in a browser.
-- The GUI can start and stop the model proxy, start and stop Codex app process monitoring, inspect one command, and read recent logs.
+- The GUI has a ccswitch-style layout: one main protection row, one-click enable/disable, compact status rows, hidden advanced settings, and visible logs.
 
 The underlying guard paths are:
 
 - `codex-guard run -- <codex args>` wraps Codex CLI, captures stdout/stderr, parses model-emitted command JSON, and watches child process command lines.
 - `codex-guard proxy --target <upstream-base-url>` runs an OpenAI-compatible HTTP proxy that records model requests, full captured model responses, and command-like tool calls in streamed responses.
 - `codex-guard watch-app` watches Codex app related processes and logs command lines from the app process tree.
+
+## One-Click Install
+
+For normal Windows users, download `Install-Codex-Baoan.cmd` from this repository and double-click it. The installer will:
+
+- install Node.js with `winget` when Node is missing,
+- download the latest source from GitHub,
+- install dependencies and build the app,
+- create Desktop and Start Menu shortcuts,
+- launch Codex 保安.
+
+Power users can run the same installer directly:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
 
 ## Start The GUI
 
@@ -36,11 +53,10 @@ The GUI opens at `http://127.0.0.1:8790` by default.
 ## Codex App Setup
 
 1. Open the GUI.
-2. Enter the upstream model gateway, for example `https://api.openai.com` or your OpenAI-compatible relay.
-3. Choose `只记录` or `记录并拦截高危`.
-4. Click `启动模型代理`.
-5. Copy the displayed local Base URL, usually `http://127.0.0.1:8787`.
-6. Paste it into Codex App as the OpenAI-compatible base URL.
+2. Click `一键开启`.
+3. Copy the displayed local Base URL, usually `http://127.0.0.1:8787`.
+4. Paste it into Codex App as the OpenAI-compatible base URL.
+5. Use the settings button only when changing the upstream relay, mode, port, or extra allowed folders.
 
 Keep the GUI open while Codex App is running. Recent alerts and session logs appear inside the GUI.
 

@@ -9,8 +9,8 @@ Use this skill when a user wants a guarded Codex session, visible audit logs, or
 
 ## Workflow
 
-1. Prefer the GUI for normal users: run `codex-guard gui` or double-click `Start-Codex-Baoan.cmd` on Windows.
-2. In the GUI, start the model proxy and point Codex App's OpenAI-compatible base URL to the displayed local URL.
+1. Prefer the GUI for normal users: run `codex-guard gui`, double-click `Start-Codex-Baoan.cmd`, or install with `Install-Codex-Baoan.cmd` on Windows.
+2. In the ccswitch-style GUI, click `一键开启` and point Codex App's OpenAI-compatible base URL to the displayed local URL.
 3. Start App monitoring from the GUI when process-level command visibility is needed.
 4. For Codex CLI, run `codex-guard run -- <codex args>` so Codex 保安 can capture stdout, stderr, model-emitted command JSON, and child process command lines.
 5. Review logs in the GUI or in `.codex-guard/sessions/<session>/summary.md`, `alerts.md`, `events.ndjson`, and captured response logs.

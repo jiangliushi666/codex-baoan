@@ -10,7 +10,8 @@
     "build": "tsc -p tsconfig.json && node scripts/copy-gui-assets.mjs",
     "test": "npm run build && node --test \"dist/__tests__/*.test.js\"",
     "start": "node dist/cli.js gui",
-    "doctor": "node dist/cli.js doctor"
+    "doctor": "node dist/cli.js doctor",
+    "install:local": "powershell -NoProfile -ExecutionPolicy Bypass -File ./install.ps1"
   },
   "keywords": ["codex", "monitoring", "guardrails", "plugin", "security"],
   "license": "MIT",

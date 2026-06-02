@@ -1,5 +1,6 @@
 node_modules/
 dist/
+output/
 .codex-guard/
 codex-guard.json
 npm-debug.log*

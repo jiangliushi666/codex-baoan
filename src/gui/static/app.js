@@ -1,47 +1,67 @@
 const $ = (id) => document.getElementById(id);
 
-const elements = {
+const el = {
+  tabs: [...document.querySelectorAll(".tab-button")],
+  views: {
+    app: $("view-app"),
+    cli: $("view-cli"),
+    logs: $("view-logs")
+  },
+  settingsButton: $("settingsButton"),
+  closeSettingsButton: $("closeSettingsButton"),
+  settingsPanel: $("settingsPanel"),
+  quickToggleButton: $("quickToggleButton"),
+  quickStartButton: $("quickStartButton"),
+  stopAllButton: $("stopAllButton"),
+  copyProxyButton: $("copyProxyButton"),
+  copyCliButton: $("copyCliButton"),
+  copyInstallButton: $("copyInstallButton"),
+  inspectButton: $("inspectButton"),
+  commandInput: $("commandInput"),
+  inspectBadge: $("inspectBadge"),
+  decisionText: $("decisionText"),
+  heroTitle: $("heroTitle"),
+  heroText: $("heroText"),
+  trustMeter: $("trustMeter"),
+  protectionRow: $("protectionRow"),
+  protectionBadge: $("protectionBadge"),
+  protectionSubtitle: $("protectionSubtitle"),
+  proxyMiniStatus: $("proxyMiniStatus"),
+  watchMiniStatus: $("watchMiniStatus"),
+  modeBadge: $("modeBadge"),
+  localProxyUrl: $("localProxyUrl"),
+  upstreamLabel: $("upstreamLabel"),
+  proxySessionText: $("proxySessionText"),
+  watchSessionText: $("watchSessionText"),
+  processLabel: $("processLabel"),
+  cliCommand: $("cliCommand"),
+  installCommand: $("installCommand"),
+  sessionList: $("sessionList"),
+  logView: $("logView"),
+  installState: $("installState"),
   configPath: $("configPath"),
-  proxyStatus: $("proxyStatus"),
-  watchStatus: $("watchStatus"),
   upstreamInput: $("upstreamInput"),
   portInput: $("portInput"),
   modeSelect: $("modeSelect"),
   allowInput: $("allowInput"),
-  proxyModeLabel: $("proxyModeLabel"),
-  startProxyButton: $("startProxyButton"),
-  stopProxyButton: $("stopProxyButton"),
-  localProxyUrl: $("localProxyUrl"),
-  copyProxyButton: $("copyProxyButton"),
   processNamesInput: $("processNamesInput"),
   killOnBlockInput: $("killOnBlockInput"),
-  startWatcherButton: $("startWatcherButton"),
-  stopWatcherButton: $("stopWatcherButton"),
-  commandInput: $("commandInput"),
-  inspectButton: $("inspectButton"),
-  decisionBox: $("decisionBox"),
-  sessionList: $("sessionList"),
-  logView: $("logView"),
-  refreshButton: $("refreshButton"),
-  reloadLogsButton: $("reloadLogsButton"),
+  saveSettingsButton: $("saveSettingsButton"),
   toast: $("toast")
 };
 
-let hydrated = false;
 let latestState = null;
+let hydrated = false;
 let selectedSessionId = null;
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
     ...options,
-    headers: {
-      "content-type": "application/json",
-      ...(options.headers || {})
-    }
+    headers: { "content-type": "application/json", ...(options.headers || {}) }
   });
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(data.error || `请求失败: ${response.status}`);
+    throw new Error(data.error || `请求失败：${response.status}`);
   }
   return data;
 }
@@ -49,51 +69,147 @@ async function api(path, options = {}) {
 async function loadState() {
   latestState = await api("/api/state");
   if (!hydrated) {
-    hydrateControls(latestState);
+    hydrate(latestState);
     hydrated = true;
   }
-  renderState(latestState);
+  render(latestState);
 }
 
-function hydrateControls(state) {
+function hydrate(state) {
   const config = state.config;
-  elements.configPath.textContent = state.configPath;
-  elements.upstreamInput.value = config.modelProxy.upstreamBaseUrl || "https://api.openai.com";
-  elements.portInput.value = String(config.modelProxy.port || 8787);
-  elements.modeSelect.value = config.mode || "audit";
-  elements.allowInput.value = (config.scope.extraAllow || []).join("\n");
-  elements.processNamesInput.value = (config.appWatcher.processNames || []).join(", ");
-  elements.killOnBlockInput.checked = Boolean(config.appWatcher.killOnBlock);
-  updateProxyUrl();
-  updateModeLabel();
+  el.installState.textContent = "本机防护控制台";
+  el.configPath.textContent = state.configPath;
+  el.upstreamInput.value = config.modelProxy.upstreamBaseUrl || "https://api.openai.com";
+  el.portInput.value = String(config.modelProxy.port || 8787);
+  el.modeSelect.value = config.mode || "audit";
+  el.allowInput.value = (config.scope.extraAllow || []).join("\n");
+  el.processNamesInput.value = (config.appWatcher.processNames || []).join(", ");
+  el.killOnBlockInput.checked = Boolean(config.appWatcher.killOnBlock);
+  updateDerivedLabels();
 }
 
-function renderState(state) {
+function render(state) {
   const proxy = state.runtime.proxy;
   const watcher = state.runtime.watcher;
-  elements.configPath.textContent = state.configPath;
-  setStatus(elements.proxyStatus, proxy.running, proxy.running ? `代理运行中 ${proxy.url}` : "代理未启动");
-  setStatus(elements.watchStatus, watcher.running, watcher.running ? "App 监控运行中" : "App 监控未启动");
-  elements.startProxyButton.disabled = proxy.running;
-  elements.stopProxyButton.disabled = !proxy.running;
-  elements.startWatcherButton.disabled = watcher.running;
-  elements.stopWatcherButton.disabled = !watcher.running;
+  const proxyRunning = Boolean(proxy.running);
+  const watcherRunning = Boolean(watcher.running);
+  const fullyProtected = proxyRunning && watcherRunning;
+  const partiallyProtected = proxyRunning || watcherRunning;
+
+  el.configPath.textContent = state.configPath;
+  el.protectionRow.classList.toggle("active", fullyProtected);
+  el.protectionBadge.classList.toggle("off", !fullyProtected);
+  el.protectionBadge.textContent = fullyProtected ? "当前使用" : partiallyProtected ? "部分启用" : "未启用";
+  el.protectionSubtitle.textContent = fullyProtected
+    ? "Codex App 流量和进程已处于监控中。"
+    : "模型代理 + App 进程监控，一键开启。";
+  el.proxyMiniStatus.textContent = `代理：${proxyRunning ? "运行中" : "未启动"}`;
+  el.watchMiniStatus.textContent = `监控：${watcherRunning ? "运行中" : "未启动"}`;
+  el.proxySessionText.textContent = proxyRunning ? shortPath(proxy.sessionDir) : "无会话";
+  el.watchSessionText.textContent = watcherRunning ? shortPath(watcher.sessionDir) : "无会话";
+
+  el.quickStartButton.textContent = partiallyProtected ? "停止防护" : "一键开启";
+  el.quickStartButton.classList.toggle("stop", partiallyProtected);
+  el.stopAllButton.disabled = !partiallyProtected;
+  el.quickToggleButton.textContent = partiallyProtected ? "×" : "+";
+  el.quickToggleButton.title = partiallyProtected ? "停止防护" : "一键开启防护";
+
+  el.trustMeter.classList.toggle("active", fullyProtected);
+  el.trustMeter.classList.toggle("partial", partiallyProtected && !fullyProtected);
+  el.trustMeter.querySelector("strong").textContent = fullyProtected ? "已接管" : partiallyProtected ? "部分启用" : "待启动";
+  el.heroTitle.textContent = fullyProtected ? "Codex App 已被接管" : partiallyProtected ? "防护已部分启用" : "未接管 Codex App";
+  el.heroText.textContent = fullyProtected
+    ? `把 Codex App 的 Base URL 保持为 ${proxy.url}，模型返回和进程行为会持续记录。`
+    : "点击一键开启后，把 Codex App 的 Base URL 指向本机地址即可开始记录和拦截。";
+
+  if (proxyRunning) {
+    el.localProxyUrl.textContent = proxy.url;
+    el.upstreamLabel.textContent = proxy.upstream;
+  } else {
+    updateDerivedLabels();
+  }
   renderSessions(state.sessions || []);
 }
 
-function setStatus(node, running, text) {
-  node.classList.toggle("running", Boolean(running));
-  node.lastChild.textContent = text;
+function updateDerivedLabels() {
+  const port = el.portInput.value.trim() || "8787";
+  const upstream = el.upstreamInput.value.trim() || "https://api.openai.com";
+  el.localProxyUrl.textContent = `http://127.0.0.1:${port}`;
+  el.upstreamLabel.textContent = upstream;
+  el.modeBadge.textContent = el.modeSelect.value === "block" ? "拦截高危" : "只记录";
+  el.processLabel.textContent = el.processNamesInput.value.trim() || "codex, Codex, codex-app";
+}
+
+async function toggleProtection() {
+  const running = latestState?.runtime?.proxy?.running || latestState?.runtime?.watcher?.running;
+  if (running) {
+    await stopProtection();
+  } else {
+    await api("/api/quick/start", {
+      method: "POST",
+      body: JSON.stringify(currentControlValues())
+    });
+    showToast("防护已开启");
+  }
+  await loadState();
+}
+
+async function stopProtection() {
+  await api("/api/quick/stop", { method: "POST", body: "{}" });
+  showToast("防护已停止");
+  await loadState();
+}
+
+function currentControlValues() {
+  return {
+    upstream: el.upstreamInput.value.trim(),
+    port: Number(el.portInput.value || 8787),
+    mode: el.modeSelect.value,
+    allow: el.allowInput.value,
+    processNames: el.processNamesInput.value,
+    killOnBlock: el.killOnBlockInput.checked
+  };
+}
+
+async function inspectCommand() {
+  const command = el.commandInput.value.trim();
+  if (!command) {
+    showToast("请先输入命令");
+    return;
+  }
+  const decision = await api("/api/inspect", {
+    method: "POST",
+    body: JSON.stringify({ command, mode: el.modeSelect.value, allow: el.allowInput.value })
+  });
+  el.inspectBadge.textContent = riskLabel(decision.severity);
+  el.inspectBadge.className = `soft-badge risk-${decision.severity}`;
+  const paths = decision.matchedPaths?.length ? ` 涉及路径：${decision.matchedPaths.join(", ")}` : "";
+  el.decisionText.textContent = `${decision.action === "block" ? "会拦截" : "会放行"}。${decision.message}${paths}`;
+}
+
+async function saveSettings() {
+  const config = structuredClone(latestState.config);
+  config.mode = el.modeSelect.value;
+  config.scope.extraAllow = splitLines(el.allowInput.value);
+  config.modelProxy.upstreamBaseUrl = el.upstreamInput.value.trim() || config.modelProxy.upstreamBaseUrl;
+  config.modelProxy.port = Number(el.portInput.value || config.modelProxy.port);
+  config.appWatcher.processNames = splitLines(el.processNamesInput.value).length
+    ? splitLines(el.processNamesInput.value)
+    : config.appWatcher.processNames;
+  config.appWatcher.killOnBlock = el.killOnBlockInput.checked;
+  await api("/api/config", { method: "POST", body: JSON.stringify({ config }) });
+  showToast("设置已保存");
+  await loadState();
 }
 
 function renderSessions(sessions) {
-  elements.sessionList.replaceChildren();
+  el.sessionList.replaceChildren();
   if (sessions.length === 0) {
     const empty = document.createElement("div");
-    empty.className = "note";
-    empty.textContent = "还没有会话日志。启动代理或 App 监控后会自动生成。";
-    elements.sessionList.append(empty);
-    elements.logView.textContent = "暂无日志。";
+    empty.className = "empty-note";
+    empty.textContent = "暂无会话日志。";
+    el.sessionList.append(empty);
+    el.logView.textContent = "暂无日志。开启防护后会显示最近会话。";
     return;
   }
 
@@ -106,158 +222,82 @@ function renderSessions(sessions) {
     button.type = "button";
     button.className = "session-button";
     button.classList.toggle("active", session.id === selectedSessionId);
-
-    const title = document.createElement("strong");
-    title.textContent = session.id;
+    const name = document.createElement("strong");
+    name.textContent = session.id;
     const time = document.createElement("span");
     time.textContent = new Date(session.updatedAt).toLocaleString();
-    const path = document.createElement("span");
-    path.textContent = session.sessionDir;
-    button.append(title, time, path);
+    const dir = document.createElement("span");
+    dir.textContent = session.sessionDir;
+    button.append(name, time, dir);
     button.addEventListener("click", () => {
       selectedSessionId = session.id;
       renderSessions(sessions);
     });
-    elements.sessionList.append(button);
+    el.sessionList.append(button);
   }
 
   const selected = sessions.find((session) => session.id === selectedSessionId) || sessions[0];
   const alerts = String(selected.alerts || "").trim();
   const summary = String(selected.summary || "").trim();
   const hasRealAlert = alerts && !alerts.includes("No alerts recorded yet");
-  elements.logView.textContent = `${hasRealAlert ? alerts : "# Alerts\n\n暂无高危告警。"}\n\n${summary}`;
+  el.logView.textContent = `${hasRealAlert ? alerts : "# Alerts\n\n暂无高危告警。"}\n\n${summary}`;
 }
 
-function updateProxyUrl() {
-  const port = elements.portInput.value.trim() || "8787";
-  elements.localProxyUrl.textContent = `http://127.0.0.1:${port}`;
-}
-
-function updateModeLabel() {
-  elements.proxyModeLabel.textContent = elements.modeSelect.value === "block" ? "拦截模式" : "审计模式";
-}
-
-async function startProxy() {
-  await api("/api/proxy/start", {
-    method: "POST",
-    body: JSON.stringify({
-      upstream: elements.upstreamInput.value.trim(),
-      port: Number(elements.portInput.value || 8787),
-      mode: elements.modeSelect.value,
-      allow: elements.allowInput.value
-    })
-  });
-  showToast("模型代理已启动");
-  await loadState();
-}
-
-async function stopProxy() {
-  await api("/api/proxy/stop", { method: "POST", body: "{}" });
-  showToast("模型代理已停止");
-  await loadState();
-}
-
-async function startWatcher() {
-  await api("/api/watcher/start", {
-    method: "POST",
-    body: JSON.stringify({
-      processNames: elements.processNamesInput.value,
-      mode: elements.modeSelect.value,
-      allow: elements.allowInput.value,
-      killOnBlock: elements.killOnBlockInput.checked
-    })
-  });
-  showToast("App 监控已启动");
-  await loadState();
-}
-
-async function stopWatcher() {
-  await api("/api/watcher/stop", { method: "POST", body: "{}" });
-  showToast("App 监控已停止");
-  await loadState();
-}
-
-async function inspectCommand() {
-  const command = elements.commandInput.value.trim();
-  if (!command) {
-    showToast("请先输入要检查的命令");
-    return;
+function switchView(name) {
+  for (const tab of el.tabs) {
+    tab.classList.toggle("active", tab.dataset.view === name);
   }
-  const decision = await api("/api/inspect", {
-    method: "POST",
-    body: JSON.stringify({
-      command,
-      mode: elements.modeSelect.value,
-      allow: elements.allowInput.value
-    })
-  });
-  renderDecision(decision);
+  for (const [viewName, node] of Object.entries(el.views)) {
+    node.classList.toggle("active", viewName === name);
+  }
 }
 
-function renderDecision(decision) {
-  elements.decisionBox.replaceChildren();
-  const dot = document.createElement("span");
-  dot.className = `risk-dot ${decision.severity}`;
-  const body = document.createElement("div");
-  const title = document.createElement("strong");
-  title.textContent = `${riskLabel(decision.severity)}，动作：${decision.action === "block" ? "拦截" : "放行"}`;
-  const message = document.createElement("p");
-  message.textContent = decision.message;
-  body.append(title, message);
-
-  if (decision.reasons?.length) {
-    const detail = document.createElement("p");
-    detail.textContent = decision.reasons.map((reason) => `${reason.code}: ${reason.evidence || reason.message}`).join(" | ");
-    body.append(detail);
-  }
-
-  if (decision.matchedPaths?.length) {
-    const paths = document.createElement("p");
-    paths.textContent = `涉及路径：${decision.matchedPaths.join(", ")}`;
-    body.append(paths);
-  }
-
-  elements.decisionBox.append(dot, body);
+async function copyText(text, message) {
+  await navigator.clipboard.writeText(text);
+  showToast(message);
 }
 
 function riskLabel(severity) {
-  return {
-    info: "无明显风险",
-    low: "低风险",
-    medium: "中风险",
-    high: "高风险",
-    critical: "严重风险"
-  }[severity] || severity;
+  return ({ info: "无明显风险", low: "低风险", medium: "中风险", high: "高风险", critical: "严重风险" })[severity] || severity;
 }
 
-async function copyProxyUrl() {
-  await navigator.clipboard.writeText(elements.localProxyUrl.textContent);
-  showToast("本地 Base URL 已复制");
+function shortPath(value) {
+  const text = String(value || "");
+  return text.length > 30 ? `...${text.slice(-30)}` : text;
+}
+
+function splitLines(value) {
+  return String(value || "").split(/[\n,;]/).map((item) => item.trim()).filter(Boolean);
 }
 
 function showToast(message) {
-  elements.toast.textContent = message;
-  elements.toast.classList.add("show");
+  el.toast.textContent = message;
+  el.toast.classList.add("show");
   window.clearTimeout(showToast.timer);
-  showToast.timer = window.setTimeout(() => elements.toast.classList.remove("show"), 2400);
-}
-
-function bindEvents() {
-  elements.refreshButton.addEventListener("click", () => loadState().catch(showError));
-  elements.reloadLogsButton.addEventListener("click", () => loadState().catch(showError));
-  elements.startProxyButton.addEventListener("click", () => startProxy().catch(showError));
-  elements.stopProxyButton.addEventListener("click", () => stopProxy().catch(showError));
-  elements.startWatcherButton.addEventListener("click", () => startWatcher().catch(showError));
-  elements.stopWatcherButton.addEventListener("click", () => stopWatcher().catch(showError));
-  elements.inspectButton.addEventListener("click", () => inspectCommand().catch(showError));
-  elements.copyProxyButton.addEventListener("click", () => copyProxyUrl().catch(showError));
-  elements.portInput.addEventListener("input", updateProxyUrl);
-  elements.modeSelect.addEventListener("change", updateModeLabel);
+  showToast.timer = window.setTimeout(() => el.toast.classList.remove("show"), 2300);
 }
 
 function showError(error) {
   console.error(error);
   showToast(error instanceof Error ? error.message : String(error));
+}
+
+function bindEvents() {
+  el.tabs.forEach((tab) => tab.addEventListener("click", () => switchView(tab.dataset.view)));
+  el.settingsButton.addEventListener("click", () => el.settingsPanel.classList.add("open"));
+  el.closeSettingsButton.addEventListener("click", () => el.settingsPanel.classList.remove("open"));
+  el.quickToggleButton.addEventListener("click", () => toggleProtection().catch(showError));
+  el.quickStartButton.addEventListener("click", () => toggleProtection().catch(showError));
+  el.stopAllButton.addEventListener("click", () => stopProtection().catch(showError));
+  el.inspectButton.addEventListener("click", () => inspectCommand().catch(showError));
+  el.copyProxyButton.addEventListener("click", () => copyText(el.localProxyUrl.textContent, "Base URL 已复制").catch(showError));
+  el.copyCliButton.addEventListener("click", () => copyText(el.cliCommand.textContent, "CLI 命令已复制").catch(showError));
+  el.copyInstallButton.addEventListener("click", () => copyText(el.installCommand.textContent, "安装命令已复制").catch(showError));
+  el.saveSettingsButton.addEventListener("click", () => saveSettings().catch(showError));
+  [el.upstreamInput, el.portInput, el.modeSelect, el.processNamesInput].forEach((node) => {
+    node.addEventListener("input", updateDerivedLabels);
+    node.addEventListener("change", updateDerivedLabels);
+  });
 }
 
 bindEvents();

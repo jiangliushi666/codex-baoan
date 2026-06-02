@@ -12,7 +12,7 @@
   "interface": {
     "displayName": "Codex 保安",
     "shortDescription": "GUI monitor for Codex commands, responses, and risky behavior.",
-    "longDescription": "Codex 保安 provides a local GUI audit layer for Codex CLI and Codex app sessions. It records visible logs, derives an allowed workspace scope from the user request, flags risky command behavior, and can optionally block critical actions when routed through supported guard paths.",
+    "longDescription": "Codex 保安 provides a clean local GUI audit layer for Codex CLI and Codex app sessions. It offers one-click protection, visible logs, dynamic workspace scope, risky command detection, and optional blocking when routed through supported guard paths.",
     "developerName": "Local developer",
     "category": "Developer Tools",
     "capabilities": ["Local GUI", "Local monitoring", "Policy checks", "Model proxy capture"],

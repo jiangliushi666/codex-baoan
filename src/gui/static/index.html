@@ -7,159 +7,161 @@
     <link rel="stylesheet" href="/assets/styles.css" />
   </head>
   <body>
-    <div class="shell">
-      <aside class="sidebar" aria-label="主导航">
-        <div class="brand">
-          <div class="brand-mark" aria-hidden="true">保</div>
+    <main class="app-frame">
+      <header class="titlebar">
+        <div class="window-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div class="brandline">
+          <div class="brand-mark">保</div>
           <div>
             <h1>Codex 保安</h1>
-            <p>本地监控控制台</p>
+            <p id="installState">本机防护控制台</p>
           </div>
         </div>
-
-        <nav class="nav-list">
-          <a href="#overview">运行状态</a>
-          <a href="#proxy">模型代理</a>
-          <a href="#watcher">App 监控</a>
-          <a href="#inspect">风险检查</a>
-          <a href="#logs">日志</a>
+        <nav class="segmented" aria-label="视图切换">
+          <button class="tab-button active" data-view="app" type="button">Codex App</button>
+          <button class="tab-button" data-view="cli" type="button">Codex CLI</button>
+          <button class="tab-button" data-view="logs" type="button">日志</button>
         </nav>
-
-        <div class="sidebar-foot">
-          <span class="muted">配置文件</span>
-          <code id="configPath">加载中</code>
+        <div class="toolbar">
+          <button class="icon-button" id="settingsButton" title="设置" type="button">⚙</button>
+          <button class="add-button" id="quickToggleButton" title="一键开启防护" type="button">+</button>
         </div>
-      </aside>
+      </header>
 
-      <main class="workspace">
-        <section class="topbar" id="overview">
-          <div>
-            <p class="eyebrow">本机生效</p>
-            <h2>把 Codex 的模型返回和进程行为放到明面上</h2>
-          </div>
-          <div class="status-strip" aria-live="polite">
-            <span class="status-pill" id="proxyStatus"><i></i>代理未启动</span>
-            <span class="status-pill" id="watchStatus"><i></i>App 监控未启动</span>
-          </div>
-        </section>
+      <section class="status-hero">
+        <div>
+          <p class="eyebrow">实时状态</p>
+          <h2 id="heroTitle">未接管 Codex App</h2>
+          <p id="heroText">启动防护后，把 Codex App 的 Base URL 指向本机地址即可开始记录和拦截。</p>
+        </div>
+        <div class="trust-meter" id="trustMeter">
+          <span></span>
+          <strong>待启动</strong>
+        </div>
+      </section>
 
-        <section class="quick-guide">
-          <div>
-            <strong>普通用法</strong>
-            <span>先启动模型代理，再把 Codex App 的 OpenAI-compatible base URL 改成下面显示的本地地址。</span>
-          </div>
-          <button class="ghost-button" id="refreshButton" type="button">刷新状态</button>
-        </section>
-
-        <section class="grid two">
-          <article class="panel" id="proxy">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Codex App 推荐</p>
-                <h3>模型代理</h3>
+      <section class="view active" id="view-app">
+        <div class="switch-list">
+          <article class="switch-row primary-row" id="protectionRow">
+            <div class="drag-handle" aria-hidden="true">⋮⋮</div>
+            <div class="row-icon shield-icon">盾</div>
+            <div class="row-main">
+              <div class="row-titleline">
+                <h3>Codex App 防护</h3>
+                <span class="current-badge" id="protectionBadge">未启用</span>
               </div>
-              <span class="mode-badge" id="proxyModeLabel">审计模式</span>
+              <p id="protectionSubtitle">模型代理 + App 进程监控，一键开启。</p>
             </div>
-
-            <label class="field">
-              <span>上游模型中转站地址</span>
-              <input id="upstreamInput" spellcheck="false" placeholder="https://api.openai.com" />
-            </label>
-
-            <div class="form-row">
-              <label class="field">
-                <span>本地端口</span>
-                <input id="portInput" inputmode="numeric" placeholder="8787" />
-              </label>
-              <label class="field">
-                <span>运行模式</span>
-                <select id="modeSelect">
-                  <option value="audit">只记录</option>
-                  <option value="block">记录并拦截高危</option>
-                </select>
-              </label>
+            <div class="row-stats">
+              <span id="proxyMiniStatus">代理：未启动</span>
+              <span id="watchMiniStatus">监控：未启动</span>
             </div>
-
-            <label class="field">
-              <span>额外允许目录</span>
-              <textarea id="allowInput" rows="3" placeholder="每行一个目录，例如 F:\vibe\my-project"></textarea>
-            </label>
-
-            <div class="button-row">
-              <button class="primary-button" id="startProxyButton" type="button">启动模型代理</button>
-              <button class="secondary-button" id="stopProxyButton" type="button">停止</button>
-            </div>
-
-            <div class="result-box">
-              <span>给 Codex App 填这个 Base URL</span>
-              <code id="localProxyUrl">http://127.0.0.1:8787</code>
-              <button class="ghost-button compact" id="copyProxyButton" type="button">复制</button>
-            </div>
+            <button class="row-action" id="quickStartButton" type="button">一键开启</button>
           </article>
 
-          <article class="panel" id="watcher">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">额外监控</p>
-                <h3>Codex App 进程</h3>
-              </div>
-              <span class="mode-badge">进程树</span>
+          <article class="switch-row">
+            <div class="drag-handle" aria-hidden="true">⋮⋮</div>
+            <div class="row-icon proxy-icon">↔</div>
+            <div class="row-main">
+              <div class="row-titleline"><h3>模型代理</h3><span class="soft-badge" id="modeBadge">只记录</span></div>
+              <p><span id="localProxyUrl">http://127.0.0.1:8787</span> → <span id="upstreamLabel">https://api.openai.com</span></p>
             </div>
-
-            <label class="field">
-              <span>进程名</span>
-              <input id="processNamesInput" spellcheck="false" placeholder="codex, Codex, codex-app" />
-            </label>
-
-            <label class="check-row">
-              <input id="killOnBlockInput" type="checkbox" />
-              <span>发现拦截级别行为时尝试结束进程</span>
-            </label>
-
-            <div class="button-row">
-              <button class="primary-button" id="startWatcherButton" type="button">启动 App 监控</button>
-              <button class="secondary-button" id="stopWatcherButton" type="button">停止</button>
-            </div>
-
-            <div class="note">
-              进程监控能记录和事后处置。要在模型返回阶段提前拦截，请同时使用模型代理。
-            </div>
+            <div class="row-stats"><span id="proxySessionText">无会话</span></div>
+            <button class="ghost-row-action" id="copyProxyButton" type="button">复制地址</button>
           </article>
-        </section>
 
-        <section class="panel" id="inspect">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">手动判断</p>
-              <h3>检查一条命令</h3>
+          <article class="switch-row">
+            <div class="drag-handle" aria-hidden="true">⋮⋮</div>
+            <div class="row-icon process-icon">⌁</div>
+            <div class="row-main">
+              <div class="row-titleline"><h3>进程监控</h3><span class="soft-badge">Codex</span></div>
+              <p id="processLabel">codex, Codex, codex-app</p>
             </div>
-            <button class="ghost-button" id="inspectButton" type="button">检查风险</button>
-          </div>
-          <textarea id="commandInput" class="command-input" rows="4" placeholder="例如：Get-Content C:/Users/j/.ssh/id_rsa"></textarea>
-          <div class="decision" id="decisionBox">
-            <span class="risk-dot"></span>
-            <div>
-              <strong>等待检查</strong>
-              <p>输入命令后会显示风险等级、原因和涉及路径。</p>
-            </div>
-          </div>
-        </section>
+            <div class="row-stats"><span id="watchSessionText">无会话</span></div>
+            <button class="ghost-row-action" id="stopAllButton" type="button">停止防护</button>
+          </article>
 
-        <section class="panel" id="logs">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">清晰可见</p>
-              <h3>最近日志</h3>
+          <article class="switch-row inspect-row">
+            <div class="drag-handle" aria-hidden="true">⋮⋮</div>
+            <div class="row-icon inspect-icon">?</div>
+            <div class="row-main">
+              <div class="row-titleline"><h3>命令风险检查</h3><span class="soft-badge" id="inspectBadge">等待输入</span></div>
+              <input id="commandInput" spellcheck="false" placeholder="粘贴一条命令，例如 Get-Content C:/Users/j/.ssh/id_rsa" />
+              <p id="decisionText">检查结果会显示风险等级、原因和涉及路径。</p>
             </div>
-            <button class="ghost-button" id="reloadLogsButton" type="button">重新读取</button>
-          </div>
-          <div class="log-layout">
-            <div class="session-list" id="sessionList"></div>
-            <pre class="log-view" id="logView">暂无日志。启动代理或 App 监控后会显示在这里。</pre>
-          </div>
-        </section>
-      </main>
-    </div>
+            <button class="ghost-row-action" id="inspectButton" type="button">检查</button>
+          </article>
+        </div>
+      </section>
+
+      <section class="view" id="view-cli">
+        <div class="switch-list">
+          <article class="switch-row">
+            <div class="drag-handle" aria-hidden="true">⋮⋮</div>
+            <div class="row-icon cli-icon">$</div>
+            <div class="row-main">
+              <div class="row-titleline"><h3>CLI 守护命令</h3><span class="current-badge">可用</span></div>
+              <p>用这条命令启动 Codex CLI，Codex 保安会捕获输出、命令和子进程。</p>
+              <code class="copy-line" id="cliCommand">codex-guard run --mode block -- codex "只允许处理当前项目"</code>
+            </div>
+            <button class="ghost-row-action" id="copyCliButton" type="button">复制</button>
+          </article>
+          <article class="switch-row">
+            <div class="drag-handle" aria-hidden="true">⋮⋮</div>
+            <div class="row-icon install-icon">↓</div>
+            <div class="row-main">
+              <div class="row-titleline"><h3>一键安装</h3><span class="soft-badge">Windows</span></div>
+              <p>下载仓库后双击 Install-Codex-Baoan.cmd，或运行远程安装脚本。</p>
+              <code class="copy-line" id="installCommand">powershell -ExecutionPolicy Bypass -File .\install.ps1</code>
+            </div>
+            <button class="ghost-row-action" id="copyInstallButton" type="button">复制</button>
+          </article>
+        </div>
+      </section>
+
+      <section class="view" id="view-logs">
+        <div class="logs-shell">
+          <div class="session-list" id="sessionList"></div>
+          <pre class="log-view" id="logView">暂无日志。开启防护后会显示最近会话。</pre>
+        </div>
+      </section>
+    </main>
+
+    <aside class="settings-panel" id="settingsPanel" aria-hidden="true">
+      <div class="settings-header">
+        <h2>设置</h2>
+        <button class="icon-button" id="closeSettingsButton" type="button">×</button>
+      </div>
+      <label class="field">
+        <span>上游模型中转站</span>
+        <input id="upstreamInput" spellcheck="false" placeholder="https://api.openai.com" />
+      </label>
+      <label class="field">
+        <span>本地端口</span>
+        <input id="portInput" inputmode="numeric" placeholder="8787" />
+      </label>
+      <label class="field">
+        <span>模式</span>
+        <select id="modeSelect">
+          <option value="audit">只记录</option>
+          <option value="block">记录并拦截高危</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>额外允许目录</span>
+        <textarea id="allowInput" rows="4" placeholder="每行一个目录"></textarea>
+      </label>
+      <label class="field">
+        <span>Codex App 进程名</span>
+        <input id="processNamesInput" spellcheck="false" placeholder="codex, Codex, codex-app" />
+      </label>
+      <label class="check-row">
+        <input id="killOnBlockInput" type="checkbox" />
+        <span>高危时尝试结束进程</span>
+      </label>
+      <button class="settings-save" id="saveSettingsButton" type="button">保存设置</button>
+      <div class="config-path"><span>配置文件</span><code id="configPath">加载中</code></div>
+    </aside>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="/assets/app.js" type="module"></script>
