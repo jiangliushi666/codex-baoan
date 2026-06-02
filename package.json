@@ -15,7 +15,9 @@
     "desktop:dev": "npm run build && electron .",
     "gui": "node dist/cli.js gui",
     "doctor": "node dist/cli.js doctor",
-    "install:local": "powershell -NoProfile -ExecutionPolicy Bypass -File ./install.ps1"
+    "install:local": "powershell -NoProfile -ExecutionPolicy Bypass -File ./install.ps1",
+    "upgrade:local": "powershell -NoProfile -ExecutionPolicy Bypass -File ./install.ps1 -Upgrade",
+    "uninstall:local": "powershell -NoProfile -ExecutionPolicy Bypass -File ./install.ps1 -Uninstall"
   },
   "keywords": [
     "codex",

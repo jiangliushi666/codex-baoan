@@ -8,7 +8,8 @@ const nodes = {
   refreshButton: byId("refreshButton"), settingsButton: byId("settingsButton"), closeSettingsButton: byId("closeSettingsButton"), settingsPanel: byId("settingsPanel"), quickToggleButton: byId("quickToggleButton"),
   inspectButton: byId("inspectButton"), commandInput: byId("commandInput"), inspectBadge: byId("inspectBadge"), decisionText: byId("decisionText"),
   sessionList: byId("sessionList"), logView: byId("logView"), configPath: byId("configPath"), upstreamInput: byId("upstreamInput"), apiKeyInput: byId("apiKeyInput"),
-  portInput: byId("portInput"), modeSelect: byId("modeSelect"), allowInput: byId("allowInput"), processNamesInput: byId("processNamesInput"), killOnBlockInput: byId("killOnBlockInput"), saveSettingsButton: byId("saveSettingsButton"), toast: byId("toast")
+  portInput: byId("portInput"), modeSelect: byId("modeSelect"), allowInput: byId("allowInput"), processNamesInput: byId("processNamesInput"), killOnBlockInput: byId("killOnBlockInput"), saveSettingsButton: byId("saveSettingsButton"),
+  appVersion: byId("appVersion"), appManageHint: byId("appManageHint"), upgradeButton: byId("upgradeButton"), openInstallDirButton: byId("openInstallDirButton"), uninstallButton: byId("uninstallButton"), toast: byId("toast")
 };
 
 let latestState = null;
@@ -52,6 +53,7 @@ function render(state) {
   nodes.guardDetail.textContent = proxy.running ? (proxy.providerName || proxy.upstream || "本地代理运行中") : discoveryReason(discovery);
   nodes.subtitleText.textContent = discovery.providers.length ? "已发现 " + discovery.providers.length + " 个上游" : "等待可用来源";
   nodes.providerSummary.textContent = discovery.providers.length ? "选择一行即可把 Codex 流量接入本地保护，密钥不会显示在界面里。" : "没有发现可用来源，请打开备用设置。";
+  renderAppManagement(state.app || {});
   renderSourcePills(discovery.sources || []);
   renderProviderList(nodes.providerList, discovery.providers || []);
   renderProviderList(nodes.ccswitchList, (discovery.providers || []).filter((provider) => provider.source === "ccswitch"));
@@ -67,6 +69,15 @@ function renderSourcePills(sources) {
     pill.textContent = source.label + " · " + (source.status === "ok" ? source.providerCount : source.status === "missing" ? "未找到" : "错误");
     nodes.sourcePills.append(pill);
   }
+}
+
+function renderAppManagement(app) {
+  const canManage = Boolean(app.canManage);
+  nodes.appVersion.textContent = "v" + (app.version || "0.1.0");
+  nodes.upgradeButton.disabled = !canManage;
+  nodes.uninstallButton.disabled = !canManage;
+  nodes.openInstallDirButton.disabled = !app.installDir;
+  nodes.appManageHint.textContent = canManage ? "升级会下载 GitHub main 分支并覆盖安装；卸载会移除快捷方式、注册表项和安装目录。" : "请从桌面应用打开，才能执行升级和卸载。";
 }
 
 function renderProviderList(container, providers) {
@@ -168,6 +179,19 @@ async function saveSettings() {
   await loadState();
 }
 
+async function runAppAction(action) {
+  if (action === "upgrade") {
+    const ok = window.confirm("升级会关闭当前保护进程，下载 GitHub 最新版本并覆盖安装。继续？");
+    if (!ok) return;
+  }
+  if (action === "uninstall") {
+    const ok = window.confirm("卸载会关闭 Codex 保安，并移除快捷方式、注册表项和安装目录。继续？");
+    if (!ok) return;
+  }
+  await api("/api/app/action", { method: "POST", headers: { "x-codex-baoan-desktop": "1" }, body: JSON.stringify({ action }) });
+  showToast(action === "upgrade" ? "已开始升级" : action === "uninstall" ? "已开始卸载" : "已打开安装目录");
+}
+
 function renderSessions(sessions) {
   nodes.sessionList.replaceChildren();
   if (!sessions.length) { nodes.sessionList.innerHTML = "<div class='empty-note'>暂无会话日志。</div>"; nodes.logView.textContent = "暂无日志。启用保护后会显示最近会话。"; return; }
@@ -215,6 +239,9 @@ function bindEvents() {
   nodes.refreshButton.addEventListener("click", () => loadState().then(() => showToast("已重新扫描")).catch(showError));
   nodes.inspectButton.addEventListener("click", () => inspectCommand().catch(showError));
   nodes.saveSettingsButton.addEventListener("click", () => saveSettings().catch(showError));
+  nodes.upgradeButton.addEventListener("click", () => runAppAction("upgrade").catch(showError));
+  nodes.openInstallDirButton.addEventListener("click", () => runAppAction("open-install-dir").catch(showError));
+  nodes.uninstallButton.addEventListener("click", () => runAppAction("uninstall").catch(showError));
 }
 
 bindEvents();

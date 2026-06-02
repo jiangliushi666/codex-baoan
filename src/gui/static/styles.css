@@ -111,6 +111,16 @@ h1 { color: var(--blue); font-size: 24px; line-height: 1.1; }
 .settings-save { min-height: 42px; border: 0; border-radius: 8px; background: var(--blue); color: #ffffff; font-weight: 780; }
 .config-path { display: grid; gap: 7px; }
 .config-path code { padding: 10px; border-radius: 8px; background: #f8fafc; border: 1px solid var(--line); overflow-wrap: anywhere; }
+.app-management { display: grid; gap: 10px; padding-top: 4px; border-top: 1px solid var(--line); }
+.management-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.management-title h3 { font-size: 16px; }
+.management-title span, .app-management p { color: var(--muted); font-size: 12px; }
+.management-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.secondary-action, .danger-action { min-height: 38px; border-radius: 8px; padding: 8px 10px; font-weight: 760; border: 1px solid var(--line); background: #ffffff; color: #344054; }
+.secondary-action:hover { background: #f3f4f6; }
+.danger-action { border-color: #fda29b; color: #b42318; background: #fff7f6; }
+.danger-action:hover { background: #fee4e2; }
+.secondary-action:disabled, .danger-action:disabled { opacity: 0.45; cursor: not-allowed; }
 .toast { position: fixed; right: 18px; bottom: 18px; max-width: min(420px, calc(100vw - 36px)); padding: 12px 14px; border-radius: 8px; background: #111318; color: #ffffff; opacity: 0; transform: translateY(10px); pointer-events: none; transition: opacity 160ms ease, transform 160ms ease; z-index: 20; }
 .toast.show { opacity: 1; transform: translateY(0); }
 

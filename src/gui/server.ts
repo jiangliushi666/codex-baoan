@@ -97,6 +97,9 @@ async function routeRequest(
     if (url.pathname === "/api/config" && request.method === "POST") {
       return await saveConfig(request, response, options);
     }
+    if (url.pathname === "/api/app/action" && request.method === "POST") {
+      return await appAction(request, response, options, state);
+    }
     if (url.pathname === "/api/inspect" && request.method === "POST") {
       return await inspectCommand(request, response, options);
     }
@@ -130,6 +133,7 @@ async function getState(options: GuiServerOptions & { configPath: string }, stat
   const discovery = await discoverProviders();
   return {
     appName: "Codex 保安",
+    app: await getAppInfo(options.cwd),
     configPath: resolveConfigPath(options.configPath, options.cwd),
     cwd: options.cwd,
     config,
@@ -399,6 +403,79 @@ async function stopWatcher(response: ServerResponse, state: RuntimeState): Promi
     message: "App watcher stopped."
   });
   sendJson(response, { ok: true, running: false });
+}
+
+async function appAction(
+  request: IncomingMessage,
+  response: ServerResponse,
+  options: GuiServerOptions & { configPath: string },
+  state: RuntimeState
+): Promise<void> {
+  if (process.platform !== "win32") {
+    return sendJson(response, { error: "App management is currently implemented for Windows." }, 400);
+  }
+  if (process.env.CODEX_BAOAN_DESKTOP !== "1" || request.headers["x-codex-baoan-desktop"] !== "1") {
+    return sendJson(response, { error: "App management is only available inside the desktop app." }, 403);
+  }
+
+  const body = await readJsonBody<{ action?: string }>(request);
+  if (body.action === "open-install-dir") {
+    launchDetached("explorer.exe", [options.cwd], options.cwd, false);
+    return sendJson(response, { ok: true, message: "Install folder opened." });
+  }
+
+  if (body.action !== "upgrade" && body.action !== "uninstall") {
+    return sendJson(response, { error: "Unsupported app action." }, 400);
+  }
+
+  const installer = path.join(options.cwd, "install.ps1");
+  if (!existsSync(installer)) {
+    return sendJson(response, { error: "install.ps1 was not found in the app directory." }, 404);
+  }
+
+  await stopRuntime(state);
+  const args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", installer, "-InstallDir", options.cwd, body.action === "upgrade" ? "-Upgrade" : "-Uninstall"];
+  launchDetached("powershell.exe", args, options.cwd, true);
+  sendJson(response, { ok: true, message: body.action === "upgrade" ? "Upgrade started." : "Uninstall started." });
+}
+
+async function getAppInfo(cwd: string): Promise<Record<string, unknown>> {
+  let version = "0.1.0";
+  try {
+    const parsed = JSON.parse(await readFile(path.join(cwd, "package.json"), "utf8")) as { version?: string };
+    version = parsed.version || version;
+  } catch {
+    // Keep the packaged fallback version.
+  }
+
+  return {
+    version,
+    installDir: cwd,
+    desktopMode: process.env.CODEX_BAOAN_DESKTOP === "1",
+    canManage: process.platform === "win32" && process.env.CODEX_BAOAN_DESKTOP === "1",
+    upgradeScript: existsSync(path.join(cwd, "Upgrade-Codex-Baoan.cmd")),
+    uninstallScript: existsSync(path.join(cwd, "Uninstall-Codex-Baoan.cmd"))
+  };
+}
+
+async function stopRuntime(state: RuntimeState): Promise<void> {
+  if (state.proxy) {
+    const proxy = state.proxy;
+    state.proxy = undefined;
+    await proxy.logger.record({ type: "app.proxy_stop", source: "gui", message: "App management stopped the model proxy." });
+    await closeServer(proxy.server);
+  }
+  if (state.watcher) {
+    const watcher = state.watcher;
+    state.watcher = undefined;
+    watcher.handle.stop();
+    await watcher.logger.record({ type: "app.watcher_stop", source: "gui", message: "App management stopped the process watcher." });
+  }
+}
+
+function launchDetached(command: string, args: string[], cwd: string, windowsHide: boolean): void {
+  const child = spawn(command, args, { cwd, detached: true, stdio: "ignore", windowsHide });
+  child.unref();
 }
 
 async function resolveUpstreamTarget(

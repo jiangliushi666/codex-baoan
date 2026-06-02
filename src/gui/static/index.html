@@ -63,6 +63,15 @@
       <label class="check-row"><input id="killOnBlockInput" type="checkbox" /><span>检测到高危时尝试结束进程</span></label>
       <button class="settings-save" id="saveSettingsButton" type="button">保存</button>
       <div class="config-path"><span>配置文件</span><code id="configPath">Loading</code></div>
+      <section class="app-management">
+        <div class="management-title"><h3>应用管理</h3><span id="appVersion">v0.1.0</span></div>
+        <div class="management-actions">
+          <button class="secondary-action" id="upgradeButton" type="button">升级</button>
+          <button class="secondary-action" id="openInstallDirButton" type="button">安装目录</button>
+          <button class="danger-action" id="uninstallButton" type="button">卸载</button>
+        </div>
+        <p id="appManageHint">仅桌面应用内可执行升级和卸载。</p>
+      </section>
     </aside>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>

@@ -11,7 +11,7 @@ Windows 用户下载并双击 Install-Codex-Baoan.cmd。安装器会自动完成
 - 检查 Node.js，缺失时用 winget 安装 Node.js LTS。
 - 从 https://github.com/jiangliushi666/codex-baoan 下载最新代码。
 - 安装依赖并构建桌面应用。
-- 创建桌面和开始菜单快捷方式。
+- 创建桌面快捷方式、开始菜单文件夹和 Windows 设置里的卸载项。
 - 直接启动 Codex 保安桌面窗口。
 
 也可以在项目目录运行：
@@ -30,6 +30,21 @@ Windows 用户下载并双击 Install-Codex-Baoan.cmd。安装器会自动完成
     npm start
 
 npm start 会构建并打开桌面窗口。内部仍有本地后端服务，但它只服务于桌面壳；npm run gui / codex-guard gui --no-open 仅用于调试。
+
+## 升级和卸载
+
+普通用户可以从三个地方管理应用：
+
+- 桌面应用右侧备用设置里的应用管理区：升级、打开安装目录、卸载。
+- 开始菜单 Codex Baoan 文件夹：Codex Baoan、Upgrade Codex Baoan、Uninstall Codex Baoan。
+- Windows 设置 > 应用 > 已安装的应用：Codex Baoan 卸载项。
+
+命令行方式：
+
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Upgrade
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Uninstall
+
+升级会从 GitHub main 分支下载最新代码、停止当前 Codex 保安进程、覆盖安装、重建依赖并刷新快捷方式和卸载注册表项。卸载会移除桌面/开始菜单快捷方式、Windows 卸载注册表项，并安排删除安装目录。
 
 ## 开箱即用发现
 

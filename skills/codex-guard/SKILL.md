@@ -14,6 +14,7 @@ Use this skill when a user wants a guarded Codex session, visible audit logs, or
 3. Start App monitoring from the desktop app when process-level command visibility is needed.
 4. For Codex CLI, run codex-guard run -- <codex args> so Codex 保安 can capture stdout, stderr, model-emitted command JSON, and child process command lines.
 5. Review logs in the desktop app or in .codex-guard/sessions/<session>/summary.md, alerts.md, events.ndjson, and captured response logs.
+6. Use the desktop Settings app-management area, Start Menu shortcuts, or Windows installed-apps entry for upgrade and uninstall.
 
 ## Policy Notes
 
