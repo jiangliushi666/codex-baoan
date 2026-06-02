@@ -3,164 +3,57 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Codex 保安</title>
+    <title>Codex &#20445;&#23433;</title>
     <link rel="stylesheet" href="/assets/styles.css" />
   </head>
   <body>
-    <main class="app-frame">
-      <header class="titlebar">
+    <main class="app-shell">
+      <header class="topbar">
         <div class="window-dots" aria-hidden="true"><span></span><span></span><span></span></div>
-        <div class="brandline">
-          <div class="brand-mark">保</div>
-          <div>
-            <h1>Codex 保安</h1>
-            <p id="installState">本机防护控制台</p>
-          </div>
-        </div>
-        <nav class="segmented" aria-label="视图切换">
+        <div class="brand-block"><div class="brand-mark">&#20445;</div><div><h1>Codex &#20445;&#23433;</h1><p id="subtitleText">Auto-discover Codex upstreams</p></div></div>
+        <nav class="segmented" aria-label="View switcher">
           <button class="tab-button active" data-view="app" type="button">Codex App</button>
-          <button class="tab-button" data-view="cli" type="button">Codex CLI</button>
-          <button class="tab-button" data-view="logs" type="button">日志</button>
+          <button class="tab-button" data-view="ccswitch" type="button">ccswitch</button>
+          <button class="tab-button" data-view="plus" type="button">Codex++</button>
+          <button class="tab-button" data-view="logs" type="button">Logs</button>
         </nav>
         <div class="toolbar">
-          <button class="icon-button" id="settingsButton" title="设置" type="button">⚙</button>
-          <button class="add-button" id="quickToggleButton" title="一键开启防护" type="button">+</button>
+          <button class="icon-button" id="refreshButton" title="Rescan" type="button">&#8635;</button>
+          <button class="icon-button" id="settingsButton" title="Settings" type="button">&#9881;</button>
+          <button class="add-button" id="quickToggleButton" title="One-click guard" type="button">+</button>
         </div>
       </header>
 
-      <section class="status-hero">
-        <div>
-          <p class="eyebrow">实时状态</p>
-          <h2 id="heroTitle">未接管 Codex App</h2>
-          <p id="heroText">启动防护后，把 Codex App 的 Base URL 指向本机地址即可开始记录和拦截。</p>
-        </div>
-        <div class="trust-meter" id="trustMeter">
-          <span></span>
-          <strong>待启动</strong>
-        </div>
-      </section>
+      <section class="status-line" id="statusLine"><div><strong id="guardState">Not attached</strong><span id="guardDetail">Scanning default config sources</span></div><div class="status-pills" id="sourcePills"></div></section>
 
       <section class="view active" id="view-app">
-        <div class="switch-list">
-          <article class="switch-row primary-row" id="protectionRow">
-            <div class="drag-handle" aria-hidden="true">⋮⋮</div>
-            <div class="row-icon shield-icon">盾</div>
-            <div class="row-main">
-              <div class="row-titleline">
-                <h3>Codex App 防护</h3>
-                <span class="current-badge" id="protectionBadge">未启用</span>
-              </div>
-              <p id="protectionSubtitle">模型代理 + App 进程监控，一键开启。</p>
-            </div>
-            <div class="row-stats">
-              <span id="proxyMiniStatus">代理：未启动</span>
-              <span id="watchMiniStatus">监控：未启动</span>
-            </div>
-            <button class="row-action" id="quickStartButton" type="button">一键开启</button>
-          </article>
-
-          <article class="switch-row">
-            <div class="drag-handle" aria-hidden="true">⋮⋮</div>
-            <div class="row-icon proxy-icon">↔</div>
-            <div class="row-main">
-              <div class="row-titleline"><h3>模型代理</h3><span class="soft-badge" id="modeBadge">只记录</span></div>
-              <p><span id="localProxyUrl">http://127.0.0.1:8787</span> → <span id="upstreamLabel">https://api.openai.com</span></p>
-            </div>
-            <div class="row-stats"><span id="proxySessionText">无会话</span></div>
-            <button class="ghost-row-action" id="copyProxyButton" type="button">复制地址</button>
-          </article>
-
-          <article class="switch-row">
-            <div class="drag-handle" aria-hidden="true">⋮⋮</div>
-            <div class="row-icon process-icon">⌁</div>
-            <div class="row-main">
-              <div class="row-titleline"><h3>进程监控</h3><span class="soft-badge">Codex</span></div>
-              <p id="processLabel">codex, Codex, codex-app</p>
-            </div>
-            <div class="row-stats"><span id="watchSessionText">无会话</span></div>
-            <button class="ghost-row-action" id="stopAllButton" type="button">停止防护</button>
-          </article>
-
+        <div class="section-title"><h2>Discovered Codex Upstreams</h2><p id="providerSummary">Reads ccswitch, Codex++, and the active Codex config first.</p></div>
+        <div class="switch-list" id="providerList"></div>
+        <div class="switch-list compact-list">
           <article class="switch-row inspect-row">
-            <div class="drag-handle" aria-hidden="true">⋮⋮</div>
-            <div class="row-icon inspect-icon">?</div>
-            <div class="row-main">
-              <div class="row-titleline"><h3>命令风险检查</h3><span class="soft-badge" id="inspectBadge">等待输入</span></div>
-              <input id="commandInput" spellcheck="false" placeholder="粘贴一条命令，例如 Get-Content C:/Users/j/.ssh/id_rsa" />
-              <p id="decisionText">检查结果会显示风险等级、原因和涉及路径。</p>
-            </div>
-            <button class="ghost-row-action" id="inspectButton" type="button">检查</button>
+            <div class="drag-handle" aria-hidden="true">&#8942;&#8942;</div><div class="row-icon inspect-icon">?</div>
+            <div class="row-main"><div class="row-titleline"><h3>Command Risk Check</h3><span class="soft-badge" id="inspectBadge">Waiting</span></div><input id="commandInput" spellcheck="false" placeholder="Paste a command, for example Get-Content C:/Users/j/.ssh/id_rsa" /><p id="decisionText">The result shows risk level, reason, and touched paths.</p></div>
+            <button class="ghost-row-action" id="inspectButton" type="button">Check</button>
           </article>
         </div>
       </section>
 
-      <section class="view" id="view-cli">
-        <div class="switch-list">
-          <article class="switch-row">
-            <div class="drag-handle" aria-hidden="true">⋮⋮</div>
-            <div class="row-icon cli-icon">$</div>
-            <div class="row-main">
-              <div class="row-titleline"><h3>CLI 守护命令</h3><span class="current-badge">可用</span></div>
-              <p>用这条命令启动 Codex CLI，Codex 保安会捕获输出、命令和子进程。</p>
-              <code class="copy-line" id="cliCommand">codex-guard run --mode block -- codex "只允许处理当前项目"</code>
-            </div>
-            <button class="ghost-row-action" id="copyCliButton" type="button">复制</button>
-          </article>
-          <article class="switch-row">
-            <div class="drag-handle" aria-hidden="true">⋮⋮</div>
-            <div class="row-icon install-icon">↓</div>
-            <div class="row-main">
-              <div class="row-titleline"><h3>一键安装</h3><span class="soft-badge">Windows</span></div>
-              <p>下载仓库后双击 Install-Codex-Baoan.cmd，或运行远程安装脚本。</p>
-              <code class="copy-line" id="installCommand">powershell -ExecutionPolicy Bypass -File .\install.ps1</code>
-            </div>
-            <button class="ghost-row-action" id="copyInstallButton" type="button">复制</button>
-          </article>
-        </div>
-      </section>
-
-      <section class="view" id="view-logs">
-        <div class="logs-shell">
-          <div class="session-list" id="sessionList"></div>
-          <pre class="log-view" id="logView">暂无日志。开启防护后会显示最近会话。</pre>
-        </div>
-      </section>
+      <section class="view" id="view-ccswitch"><div class="section-title"><h2>ccswitch Sources</h2><p>Reads Codex providers from ~/.cc-switch/cc-switch.db.</p></div><div class="switch-list" id="ccswitchList"></div></section>
+      <section class="view" id="view-plus"><div class="section-title"><h2>Codex++ And Codex Config</h2><p>Reads ~/.codex-session-delete/settings.json and ~/.codex/config.toml.</p></div><div class="switch-list" id="plusList"></div></section>
+      <section class="view" id="view-logs"><div class="logs-shell"><div class="session-list" id="sessionList"></div><pre class="log-view" id="logView">No logs yet. Start protection to see recent sessions.</pre></div></section>
     </main>
 
     <aside class="settings-panel" id="settingsPanel" aria-hidden="true">
-      <div class="settings-header">
-        <h2>设置</h2>
-        <button class="icon-button" id="closeSettingsButton" type="button">×</button>
-      </div>
-      <label class="field">
-        <span>上游模型中转站</span>
-        <input id="upstreamInput" spellcheck="false" placeholder="https://api.openai.com" />
-      </label>
-      <label class="field">
-        <span>本地端口</span>
-        <input id="portInput" inputmode="numeric" placeholder="8787" />
-      </label>
-      <label class="field">
-        <span>模式</span>
-        <select id="modeSelect">
-          <option value="audit">只记录</option>
-          <option value="block">记录并拦截高危</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>额外允许目录</span>
-        <textarea id="allowInput" rows="4" placeholder="每行一个目录"></textarea>
-      </label>
-      <label class="field">
-        <span>Codex App 进程名</span>
-        <input id="processNamesInput" spellcheck="false" placeholder="codex, Codex, codex-app" />
-      </label>
-      <label class="check-row">
-        <input id="killOnBlockInput" type="checkbox" />
-        <span>高危时尝试结束进程</span>
-      </label>
-      <button class="settings-save" id="saveSettingsButton" type="button">保存设置</button>
-      <div class="config-path"><span>配置文件</span><code id="configPath">加载中</code></div>
+      <div class="settings-header"><h2>Fallback Settings</h2><button class="icon-button" id="closeSettingsButton" type="button">&#215;</button></div>
+      <label class="field"><span>Manual upstream Base URL</span><input id="upstreamInput" spellcheck="false" placeholder="Only needed when discovery fails" /></label>
+      <label class="field"><span>Manual API Key</span><input id="apiKeyInput" spellcheck="false" type="password" placeholder="Used only for this start request" /></label>
+      <label class="field"><span>Local port</span><input id="portInput" inputmode="numeric" placeholder="8787" /></label>
+      <label class="field"><span>Mode</span><select id="modeSelect"><option value="audit">Audit only</option><option value="block">Block critical</option></select></label>
+      <label class="field"><span>Extra allowed folders</span><textarea id="allowInput" rows="4" placeholder="One path per line"></textarea></label>
+      <label class="field"><span>Codex App process names</span><input id="processNamesInput" spellcheck="false" placeholder="codex, Codex, codex-app" /></label>
+      <label class="check-row"><input id="killOnBlockInput" type="checkbox" /><span>Try to end process on critical risk</span></label>
+      <button class="settings-save" id="saveSettingsButton" type="button">Save Settings</button>
+      <div class="config-path"><span>Config file</span><code id="configPath">Loading</code></div>
     </aside>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>

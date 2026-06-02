@@ -13,7 +13,13 @@
     "doctor": "node dist/cli.js doctor",
     "install:local": "powershell -NoProfile -ExecutionPolicy Bypass -File ./install.ps1"
   },
-  "keywords": ["codex", "monitoring", "guardrails", "plugin", "security"],
+  "keywords": [
+    "codex",
+    "monitoring",
+    "guardrails",
+    "plugin",
+    "security"
+  ],
   "license": "MIT",
   "homepage": "https://github.com/jiangliushi666/codex-baoan#readme",
   "repository": {
@@ -28,6 +34,11 @@
   },
   "devDependencies": {
     "@types/node": "^22.15.30",
+    "@types/sql.js": "^1.4.11",
     "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "smol-toml": "^1.6.1",
+    "sql.js": "^1.14.1"
   }
 }

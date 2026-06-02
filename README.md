@@ -7,7 +7,8 @@ The first version focuses on a clean local GUI first, with CLI commands kept as 
 - `Install-Codex-Baoan.cmd` installs the app, builds it, creates shortcuts, and launches the GUI on Windows.
 - `Start-Codex-Baoan.cmd` opens the GUI on Windows.
 - `npm start` or `codex-guard gui` opens the local control console in a browser.
-- The GUI has a ccswitch-style layout: one main protection row, one-click enable/disable, compact status rows, hidden advanced settings, and visible logs.
+- The GUI has a ccswitch-style layout: auto-discovered provider rows, one-click enable/disable, compact status rows, hidden fallback settings, and visible logs.
+- On startup it reads ccswitch, Codex++, and Codex default config locations before asking for any manual Base URL or API key.
 
 The underlying guard paths are:
 
@@ -53,10 +54,15 @@ The GUI opens at `http://127.0.0.1:8790` by default.
 ## Codex App Setup
 
 1. Open the GUI.
-2. Click `一键开启`.
-3. Copy the displayed local Base URL, usually `http://127.0.0.1:8787`.
-4. Paste it into Codex App as the OpenAI-compatible base URL.
-5. Use the settings button only when changing the upstream relay, mode, port, or extra allowed folders.
+2. Pick the recommended provider row or click the orange one-click button.
+3. Codex Baoan reads the upstream Base URL and API key from default local sources when available.
+4. Use fallback settings only when discovery fails or when you want to override the upstream manually.
+
+The default discovery paths are:
+
+- ccswitch: `~/.cc-switch/cc-switch.db`
+- Codex++: `~/.codex-session-delete/settings.json`
+- Codex config: `~/.codex/config.toml` and `~/.codex/auth.json`
 
 Keep the GUI open while Codex App is running. Recent alerts and session logs appear inside the GUI.
 

@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import type { Server } from "node:http";
 import { buildPolicyContext, createDefaultConfig, loadConfig, resolveConfigPath } from "../config.js";
 import { createSessionLogger } from "../logger.js";
+import { discoverProviders, publicDiscoveryResult, selectDiscoveredProvider, type DiscoveredProvider } from "../integrations/discovery.js";
 import { startProcessWatcher, type ProcessWatcherHandle } from "../monitors/appProcessWatcher.js";
 import { decisionMessage, evaluateCommand } from "../policy/engine.js";
 import { createOpenAIProxyServer, listenOpenAIProxyServer } from "../proxy/openaiProxy.js";
@@ -26,6 +27,10 @@ interface RuntimeState {
     logger: SessionLogger;
     url: string;
     upstream: string;
+    providerId?: string;
+    providerName?: string;
+    source?: string;
+    authInjected: boolean;
     startedAt: string;
   };
   watcher?: {
@@ -86,6 +91,9 @@ async function routeRequest(
     if (url.pathname === "/api/state" && request.method === "GET") {
       return await sendJson(response, await getState(options, state));
     }
+    if (url.pathname === "/api/discovery" && request.method === "GET") {
+      return await sendJson(response, publicDiscoveryResult(await discoverProviders()));
+    }
     if (url.pathname === "/api/config" && request.method === "POST") {
       return await saveConfig(request, response, options);
     }
@@ -119,16 +127,22 @@ async function routeRequest(
 
 async function getState(options: GuiServerOptions & { configPath: string }, state: RuntimeState): Promise<Record<string, unknown>> {
   const config = await loadConfig(options.configPath, options.cwd).catch(() => createDefaultConfig());
+  const discovery = await discoverProviders();
   return {
     appName: "Codex 保安",
     configPath: resolveConfigPath(options.configPath, options.cwd),
     cwd: options.cwd,
     config,
+    discovery: publicDiscoveryResult(discovery),
     runtime: {
       proxy: state.proxy ? {
         running: true,
         url: state.proxy.url,
         upstream: state.proxy.upstream,
+        providerId: state.proxy.providerId,
+        providerName: state.proxy.providerName,
+        source: state.proxy.source,
+        authInjected: state.proxy.authInjected,
         startedAt: state.proxy.startedAt,
         sessionDir: state.proxy.logger.sessionDir
       } : { running: false },
@@ -188,18 +202,19 @@ async function startProxy(
     return sendJson(response, { error: "Model proxy is already running" }, 409);
   }
 
-  const body = await readJsonBody<{ upstream?: string; host?: string; port?: number; mode?: GuardMode; allow?: string }>(request);
+  const body = await readJsonBody<{ upstream?: string; apiKey?: string; providerId?: string; host?: string; port?: number; mode?: GuardMode; allow?: string }>(request);
   const config = await loadConfig(options.configPath, options.cwd);
   const host = body.host || config.modelProxy.listenHost;
   const port = Number(body.port || config.modelProxy.port);
-  const upstream = body.upstream || config.modelProxy.upstreamBaseUrl;
+  const upstreamTarget = await resolveUpstreamTarget(config, body);
+  const upstream = upstreamTarget.upstream;
   const logger = await createSessionLogger(config, "gui-proxy", options.cwd);
   const policyContext = buildPolicyContext(config, {
     cwd: options.cwd,
     mode: body.mode,
     extraAllow: splitList(body.allow)
   });
-  const server = createOpenAIProxyServer({ config, logger, policyContext, upstreamBaseUrl: upstream, host, port });
+  const server = createOpenAIProxyServer({ config, logger, policyContext, upstreamBaseUrl: upstream, upstreamApiKey: upstreamTarget.apiKey, host, port });
   await listenOpenAIProxyServer(server, host, port);
 
   state.proxy = {
@@ -207,13 +222,17 @@ async function startProxy(
     logger,
     url: `http://${host}:${port}`,
     upstream,
+    providerId: upstreamTarget.provider?.id,
+    providerName: upstreamTarget.provider?.name,
+    source: upstreamTarget.provider?.sourceLabel,
+    authInjected: Boolean(upstreamTarget.apiKey),
     startedAt: new Date().toISOString()
   };
   await logger.record({
     type: "gui.proxy_start",
     source: "gui",
     message: `Model proxy started at ${state.proxy.url}.`,
-    data: { upstream, mode: policyContext.mode, allowedRoots: policyContext.allowedRoots }
+    data: { upstream, provider: upstreamTarget.provider?.name, authInjected: Boolean(upstreamTarget.apiKey), mode: policyContext.mode, allowedRoots: policyContext.allowedRoots }
   });
   sendJson(response, { ok: true, proxy: state.proxy });
 }
@@ -241,6 +260,8 @@ async function quickStart(
 ): Promise<void> {
   const body = await readJsonBody<{
     upstream?: string;
+    apiKey?: string;
+    providerId?: string;
     host?: string;
     port?: number;
     mode?: GuardMode;
@@ -255,23 +276,28 @@ async function quickStart(
   if (!state.proxy) {
     const host = body.host || config.modelProxy.listenHost;
     const port = Number(body.port || config.modelProxy.port);
-    const upstream = body.upstream || config.modelProxy.upstreamBaseUrl;
+    const upstreamTarget = await resolveUpstreamTarget(config, body);
+    const upstream = upstreamTarget.upstream;
     const logger = await createSessionLogger(config, "quick-proxy", options.cwd);
     const policyContext = buildPolicyContext(config, { cwd: options.cwd, mode, extraAllow });
-    const server = createOpenAIProxyServer({ config, logger, policyContext, upstreamBaseUrl: upstream, host, port });
+    const server = createOpenAIProxyServer({ config, logger, policyContext, upstreamBaseUrl: upstream, upstreamApiKey: upstreamTarget.apiKey, host, port });
     await listenOpenAIProxyServer(server, host, port);
     state.proxy = {
       server,
       logger,
       url: `http://${host}:${port}`,
       upstream,
+      providerId: upstreamTarget.provider?.id,
+      providerName: upstreamTarget.provider?.name,
+      source: upstreamTarget.provider?.sourceLabel,
+      authInjected: Boolean(upstreamTarget.apiKey),
       startedAt: new Date().toISOString()
     };
     await logger.record({
       type: "quick.proxy_start",
       source: "gui",
       message: `One-click model proxy started at ${state.proxy.url}.`,
-      data: { upstream, mode, allowedRoots: policyContext.allowedRoots }
+      data: { upstream, provider: upstreamTarget.provider?.name, authInjected: Boolean(upstreamTarget.apiKey), mode, allowedRoots: policyContext.allowedRoots }
     });
   }
 
@@ -373,6 +399,19 @@ async function stopWatcher(response: ServerResponse, state: RuntimeState): Promi
     message: "App watcher stopped."
   });
   sendJson(response, { ok: true, running: false });
+}
+
+async function resolveUpstreamTarget(
+  config: GuardConfig,
+  body: { upstream?: string; apiKey?: string; providerId?: string }
+): Promise<{ upstream: string; apiKey?: string; provider?: DiscoveredProvider }> {
+  const discovery = await discoverProviders();
+  const provider = selectDiscoveredProvider(discovery, body.providerId);
+  return {
+    upstream: body.upstream || provider?.baseUrl || config.modelProxy.upstreamBaseUrl,
+    apiKey: body.apiKey || provider?.apiKey,
+    provider
+  };
 }
 
 async function readSessions(config: GuardConfig, cwd: string): Promise<Array<Record<string, unknown>>> {

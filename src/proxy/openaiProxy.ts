@@ -8,6 +8,7 @@ export interface ProxyOptions {
   logger: SessionLogger;
   policyContext: PolicyContext;
   upstreamBaseUrl?: string;
+  upstreamApiKey?: string;
   host?: string;
   port?: number;
 }
@@ -59,7 +60,7 @@ async function handleProxyRequest(
 ): Promise<void> {
   const requestBody = await readRequestBody(request, options.config.modelProxy.maxCapturedBodyBytes);
   const target = new URL(request.url ?? "/", options.upstreamBaseUrl);
-  const headers = forwardHeaders(request.headers);
+  const headers = forwardHeaders(request.headers, options.upstreamApiKey);
 
   await options.logger.record({
     type: "model.request",
@@ -175,7 +176,7 @@ async function inspectModelText(text: string, seenCommands: Set<string>, options
   return false;
 }
 
-function forwardHeaders(headers: IncomingMessage["headers"]): Headers {
+function forwardHeaders(headers: IncomingMessage["headers"], upstreamApiKey?: string): Headers {
   const forwarded = new Headers();
   for (const [key, value] of Object.entries(headers)) {
     if (["host", "connection", "content-length"].includes(key.toLowerCase())) {
@@ -188,6 +189,9 @@ function forwardHeaders(headers: IncomingMessage["headers"]): Headers {
     } else if (typeof value === "string") {
       forwarded.set(key, value);
     }
+  }
+  if (upstreamApiKey && !forwarded.has("authorization")) {
+    forwarded.set("authorization", "Bearer " + upstreamApiKey);
   }
   return forwarded;
 }
