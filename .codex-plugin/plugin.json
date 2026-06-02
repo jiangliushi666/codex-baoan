@@ -1,7 +1,7 @@
 {
   "name": "codex-guard",
-  "version": "0.1.0",
-  "description": "Codex 保安: external monitoring and guardrail plugin for Codex CLI and Codex app workflows.",
+  "version": "0.2.0",
+  "description": "Codex 保安: Tauri desktop guard for Codex provider discovery, risky command inspection, and app lifecycle management.",
   "author": {
     "name": "Local developer"
   },
@@ -12,10 +12,10 @@
   "interface": {
     "displayName": "Codex 保安",
     "shortDescription": "Desktop monitor for Codex commands, responses, and risky behavior.",
-    "longDescription": "Codex 保安 provides a ccswitch-style desktop audit layer for Codex CLI and Codex app sessions. It offers one-click protection, automatic provider discovery, visible logs, app install/upgrade/uninstall management, dynamic workspace scope, risky command detection, and optional blocking when routed through supported guard paths.",
+    "longDescription": "Codex 保安 provides a ccswitch-style Tauri desktop audit layer for Codex workflows. It offers one-click protection state, automatic provider discovery, app install/update/uninstall entry points, risky command detection, and optional blocking when routed through supported guard paths.",
     "developerName": "Local developer",
     "category": "Developer Tools",
-    "capabilities": ["Desktop app", "Provider discovery", "App management", "Local monitoring", "Policy checks", "Model proxy capture"],
+    "capabilities": ["Tauri desktop app", "Provider discovery", "App management", "Local monitoring", "Policy checks", "Command risk inspection"],
     "defaultPrompt": [
       "Start a guarded Codex session for this repo.",
       "Inspect whether this command is risky.",

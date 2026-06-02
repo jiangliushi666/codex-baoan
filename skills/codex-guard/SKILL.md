@@ -1,23 +1,28 @@
 ---
 name: codex-guard
-description: Monitor Codex CLI or Codex app sessions with the Codex 保安 desktop app, including command-risk logging, dynamic workspace scope, optional blocking, and OpenAI-compatible model proxy capture.
+description: Use Codex 保安, a Tauri desktop guard for Codex, to inspect risky commands, review auto-discovered providers, and guide users through desktop install/update/uninstall flows.
 ---
 
 # Codex 保安
 
-Use this skill when a user wants a guarded Codex session, visible audit logs, or monitoring around an untrusted OpenAI-compatible model proxy.
+Use this skill when a user wants a guarded Codex session, provider discovery, or a desktop-first safety layer around untrusted OpenAI-compatible relays.
 
 ## Workflow
 
-1. Prefer the desktop app for normal users: install with Install-Codex-Baoan.cmd on Windows, then open the Codex Baoan shortcut or Start-Codex-Baoan.vbs.
-2. In the ccswitch-style desktop window, pick the recommended auto-discovered provider row or click the orange one-click button. Manual Base URL and API key fields are only fallback controls.
-3. Start App monitoring from the desktop app when process-level command visibility is needed.
-4. For Codex CLI, run codex-guard run -- <codex args> so Codex 保安 can capture stdout, stderr, model-emitted command JSON, and child process command lines.
-5. Review logs in the desktop app or in .codex-guard/sessions/<session>/summary.md, alerts.md, events.ndjson, and captured response logs.
-6. Use the desktop Settings app-management area, Start Menu shortcuts, or Windows installed-apps entry for upgrade and uninstall.
+1. Prefer the desktop app for normal users. Install from the latest GitHub Release and use the Tauri installer package for the operating system.
+2. In the ccswitch-style window, use the recommended auto-discovered provider row or the top-right one-click protect button.
+3. Use audit mode for visibility first; switch to block mode only when the user wants high-risk behavior stopped in supported guard paths.
+4. Use the command-risk checker to inspect suspicious commands before execution.
+5. Use the app-management drawer for install package, update check, install directory, and system uninstall entry.
 
-## Policy Notes
+## Discovery Notes
 
-- The allowed filesystem scope starts with the working directory and is expanded from explicit paths in the user's prompt or --allow flags.
-- Use --mode block and configure risk.blockLevels when the user wants enforcement instead of audit-only logging.
-- Codex app pre-execution blocking is limited unless the app is routed through the model proxy or exposes a native hook point.
+- ccswitch is searched in Roaming AppData/config paths and ~/.cc-switch/cc-switch.db.
+- Codex++ is searched in ~/.codex-session-delete/settings.json and common AppData/config variants.
+- Codex is searched in ~/.codex/config.toml.
+- API keys are not serialized to the frontend; only masked status is shown.
+
+## Limitations
+
+- The current Tauri build provides provider discovery, visible guard state, command-risk inspection, and lifecycle management.
+- Full model-response capture and pre-execution blocking require the upcoming CLI wrapper/proxy integration or a native Codex App hook.

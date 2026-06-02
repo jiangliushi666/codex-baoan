@@ -1,30 +1,35 @@
 {
-  "name": "codex-guard",
-  "version": "0.1.0",
-  "description": "Codex 保安: external guardrail and monitoring plugin for Codex CLI and Codex app workflows.",
+  "name": "codex-baoan",
+  "version": "0.2.0",
+  "description": "Codex 保安: Tauri desktop guard for Codex provider monitoring.",
   "type": "module",
-  "main": "desktop/main.cjs",
-  "bin": {
-    "codex-guard": "./dist/cli.js"
-  },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/copy-gui-assets.mjs",
-    "test": "npm run build && node --test \"dist/__tests__/*.test.js\"",
-    "start": "npm run desktop:dev",
-    "desktop": "electron .",
-    "desktop:dev": "npm run build && electron .",
-    "gui": "node dist/cli.js gui",
-    "doctor": "node dist/cli.js doctor",
-    "install:local": "powershell -NoProfile -ExecutionPolicy Bypass -File ./install.ps1",
-    "upgrade:local": "powershell -NoProfile -ExecutionPolicy Bypass -File ./install.ps1 -Upgrade",
-    "uninstall:local": "powershell -NoProfile -ExecutionPolicy Bypass -File ./install.ps1 -Uninstall"
+    "dev": "pnpm tauri dev",
+    "build": "pnpm tauri build",
+    "tauri": "tauri",
+    "dev:renderer": "vite --host 127.0.0.1 --port 3000",
+    "build:renderer": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.8.0",
+    "lucide-react": "^0.542.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.8.0",
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "^5.8.3",
+    "vite": "^7.3.0"
   },
   "keywords": [
     "codex",
-    "monitoring",
+    "tauri",
     "guardrails",
-    "plugin",
-    "security"
+    "desktop-app"
   ],
   "license": "MIT",
   "homepage": "https://github.com/jiangliushi666/codex-baoan#readme",
@@ -36,16 +41,7 @@
     "url": "https://github.com/jiangliushi666/codex-baoan/issues"
   },
   "engines": {
-    "node": ">=20.0.0"
-  },
-  "devDependencies": {
-    "@types/node": "^22.15.30",
-    "@types/sql.js": "^1.4.11",
-    "electron": "^42.3.1",
-    "typescript": "^5.8.3"
-  },
-  "dependencies": {
-    "smol-toml": "^1.6.1",
-    "sql.js": "^1.14.1"
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
   }
 }

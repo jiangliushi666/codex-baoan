@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Codex Baoan icon">
+  <rect width="512" height="512" rx="112" fill="#0a7cff"/>
+  <path d="M256 82 386 128v98c0 90-50 161-130 204-80-43-130-114-130-204v-98l130-46Z" fill="#ffffff"/>
+  <path d="M256 124 344 156v73c0 61-33 111-88 144-55-33-88-83-88-144v-73l88-32Z" fill="#101828"/>
+  <path d="M176 270h160v34H176z" fill="#ff6a1a"/>
+  <path d="M238 178h36v160h-36z" fill="#ff6a1a"/>
+</svg>

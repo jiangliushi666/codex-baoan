@@ -1,90 +1,70 @@
 # Codex 保安
 
-Codex 保安是一个给 Codex CLI / Codex App 外挂的桌面监控工具。它面向使用未知模型中转站的普通用户：默认自动读取本机已有配置，一键把 Codex 流量接入本地保护，并把高危行为和模型返回记录成清晰日志。
+Codex 保安是一个外置的 Codex 桌面保护工具，第一版按 ccswitch 的技术路线重做：Tauri 2 + Rust 后端 + React/TypeScript 前端 + Tauri bundler。它是标准桌面应用，不是浏览器页面或临时脚本壳。
 
-第一版按 ccswitch 的桌面应用形态交付：顶部应用切换、provider 大行列表、右上角一键启用、备用设置抽屉、日志面板。正常用户不需要手动输入 Base URL 或 API Key。
+它的目标是让普通用户在使用未知模型中转站时，不需要手动填写 Base URL / API Key，就能看到 Codex 连接了哪些上游、当前保护是否启用、命令风险是否命中，并能通过清晰的桌面界面完成安装、升级和卸载入口操作。
 
-## 一键安装
+## 普通用户安装
 
-Windows 用户下载并双击 Install-Codex-Baoan.cmd。安装器会自动完成：
+从 GitHub Releases 下载最新 Windows 安装包，双击安装：
 
-- 检查 Node.js，缺失时用 winget 安装 Node.js LTS。
-- 从 https://github.com/jiangliushi666/codex-baoan 下载最新代码。
-- 安装依赖并构建桌面应用。
-- 创建桌面快捷方式、开始菜单文件夹和 Windows 设置里的卸载项。
-- 直接启动 Codex 保安桌面窗口。
+https://github.com/jiangliushi666/codex-baoan/releases/latest
 
-也可以在项目目录运行：
+Tauri 会生成标准桌面安装产物，发布后安装包位于：
 
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+- Windows: .exe / .msi
+- macOS: .dmg
+- Linux: .AppImage / .deb / .rpm
 
-## 启动
+卸载走系统应用管理。Windows 用户可以在应用右侧设置抽屉里点击“卸载入口”，或打开“设置 > 应用 > 已安装的应用”。升级时下载最新 Release 安装包覆盖安装。
 
-普通用户使用桌面快捷方式 Codex Baoan，或双击：
+## 开发运行
 
-    Start-Codex-Baoan.vbs
+本项目与 ccswitch 一样使用 pnpm + Tauri：
 
-开发者可以运行：
+`ash
+pnpm install
+pnpm tauri dev
+`
 
-    npm install
-    npm start
+构建安装包：
 
-npm start 会构建并打开桌面窗口。内部仍有本地后端服务，但它只服务于桌面壳；npm run gui / codex-guard gui --no-open 仅用于调试。
+`ash
+pnpm tauri build
+`
 
-## 升级和卸载
+本地构建产物会出现在：
 
-普通用户可以从三个地方管理应用：
+`	ext
+src-tauri/target/release/bundle/
+`
 
-- 桌面应用右侧备用设置里的应用管理区：升级、打开安装目录、卸载。
-- 开始菜单 Codex Baoan 文件夹：Codex Baoan、Upgrade Codex Baoan、Uninstall Codex Baoan。
-- Windows 设置 > 应用 > 已安装的应用：Codex Baoan 卸载项。
+## 自动发现
 
-命令行方式：
+启动后会自动扫描本机已有配置，成功时直接在 provider 列表里显示，不要求用户手填密钥。
 
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Upgrade
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Uninstall
+- ccswitch: %APPDATA%\cc-switch\cc-switch.db、~/.cc-switch/cc-switch.db
+- Codex++: ~/.codex-session-delete/settings.json 及常见 AppData/config 目录
+- Codex: ~/.codex/config.toml
 
-升级会从 GitHub main 分支下载最新代码、停止当前 Codex 保安进程、覆盖安装、重建依赖并刷新快捷方式和卸载注册表项。卸载会移除桌面/开始菜单快捷方式、Windows 卸载注册表项，并安排删除安装目录。
+读取到的 API Key 只在 Rust 后端用于判断可用性，前端只显示脱敏结果。
 
-## 开箱即用发现
+## 当前能力
 
-启动后会按顺序读取默认位置：
+- ccswitch 风格的桌面窗口、顶部切换、provider 大行列表、右侧设置抽屉。
+- 一键启用/停止保护状态，自动选择推荐 provider。
+- 自动发现 ccswitch、Codex++、Codex 的默认配置位置。
+- 命令风险检查：识别密钥目录、环境文件、网络传输、删除命令等高危行为。
+- 应用管理：打开安装包页面、检查升级、打开安装目录、打开系统卸载入口。
+- Tauri 打包：标准安装/卸载能力由系统安装器负责。
 
-- ccswitch: ~/.cc-switch/cc-switch.db
-- Codex++: ~/.codex-session-delete/settings.json
-- Codex: ~/.codex/config.toml 和 ~/.codex/auth.json
+## 后续路线
 
-读取成功时，界面会显示可用 provider 行。点推荐行或右上角 + 即可启用保护。读取失败时，再打开备用设置手动指定上游。
-
-## 能监控什么
-
-- OpenAI-compatible 模型代理请求、响应和疑似工具命令。
-- Codex CLI stdout/stderr、模型返回中的命令片段、子进程命令行。
-- Codex App 相关进程命令行。
-- 根据当前工作目录、用户 prompt 中出现的路径和额外允许目录动态计算访问范围。
-
-可配置为仅记录，或在进入代理/CLI wrapper 路径时拦截高危行为。
-
-## 日志
-
-每个会话写入 .codex-guard/sessions/<session-id>/：
-
-- summary.md: 时间线。
-- alerts.md: 高危和严重告警。
-- events.ndjson: 结构化事件。
-- stdout.log / stderr.log: CLI 捕获流。
-- model-response.log: 模型响应捕获。
-
-## CLI
-
-    codex-guard run -- codex "only edit ./src"
-    codex-guard inspect-command --mode block "Get-Content C:/Users/j/.ssh/id_rsa"
-    codex-guard proxy --mode block --target https://api.openai.com
-
-## 限制
-
-在模型代理或 CLI wrapper 路径里，Codex 保安可以在执行前拦截。对封闭的 Codex App 纯进程监控只能做到发现后记录和可选结束进程，不能保证内核级预执行拦截。
+- 接入签名 Tauri updater，发布 latest.json 实现应用内升级。
+- 增加 Codex CLI wrapper 与本地代理，捕获完整模型响应和工具调用。
+- 对 Codex App 做更深的进程/网络层监控，在可路由路径中执行拦截策略。
+- 引入持久化会话日志，展示清晰的告警时间线。
 
 ## 开源
 
-MIT License。仓库地址：https://github.com/jiangliushi666/codex-baoan。
+MIT License。仓库地址：https://github.com/jiangliushi666/codex-baoan
