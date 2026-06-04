@@ -9,17 +9,15 @@ import {
   Loader2,
   Play,
   RefreshCw,
-  Search,
   Server,
   Settings,
   ShieldCheck,
   Square,
-  Terminal,
   Trash2,
   X
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AppState, DiscoveredProvider, GuardMode, InspectDecision, ViewId } from "./types";
+import type { AppState, DiscoveredProvider, GuardMode, ViewId } from "./types";
 
 const emptyState: AppState = {
   app: { version: "0.2.0", install_dir: "", bundle_managed: true, updater_configured: false },
@@ -40,15 +38,12 @@ export function App() {
   const [activeTab, setActiveTab] = useState<ViewId>("all");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mode, setMode] = useState<GuardMode>("audit");
-  const [command, setCommand] = useState("");
-  const [decision, setDecision] = useState<InspectDecision | null>(null);
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [managementBusy, setManagementBusy] = useState<string | null>(null);
-  const [inspecting, setInspecting] = useState(false);
 
   const drawerCloseRef = useRef<HTMLButtonElement>(null);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
@@ -125,23 +120,6 @@ export function App() {
       fail(err);
     } finally {
       setActionBusy(false);
-    }
-  }
-
-  async function inspect() {
-    if (!command.trim()) {
-      setError("先输入要检查的命令。");
-      return;
-    }
-    setInspecting(true);
-    setError("");
-    try {
-      const result = await invoke<InspectDecision>("inspect_command", { command, mode });
-      setDecision(result);
-    } catch (err) {
-      fail(err);
-    } finally {
-      setInspecting(false);
     }
   }
 
@@ -354,6 +332,7 @@ export function App() {
                     runningId={state.runtime.provider_id}
                     busy={actionBusy}
                     onStart={start}
+                    onSelectSource={setActiveTab}
                   />
                 ) : (
                   providers.map((provider) => (
@@ -369,43 +348,6 @@ export function App() {
               ) : (
                 <EmptyRow scanning={scanning} onRescan={() => refresh("已重新扫描")} />
               )}
-            </section>
-
-            <section className="inspectPanel" aria-labelledby="inspect-title">
-              <div className="inspectIcon" aria-hidden="true">
-                <Terminal size={20} />
-              </div>
-              <div className="inspectMain">
-                <div className="titleLine">
-                  <h3 id="inspect-title">命令检查</h3>
-                  {decision && <span className={["riskBadge", decision.severity].join(" ")}>{riskLabel(decision.severity)}</span>}
-                </div>
-                <div className="commandInput">
-                  <label className="srOnly" htmlFor="inspect-command">
-                    要检查的命令
-                  </label>
-                  <input
-                    id="inspect-command"
-                    value={command}
-                    onChange={(event) => setCommand(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") inspect();
-                    }}
-                    placeholder="Get-Content C:/Users/j/.ssh/id_rsa"
-                  />
-                  <button className="ghostButton" disabled={inspecting} onClick={inspect}>
-                    {inspecting ? <Loader2 size={15} className="spin" /> : <Search size={15} />}
-                    {inspecting ? "检查中" : "检查"}
-                  </button>
-                </div>
-                <p aria-live="polite">
-                  {decision
-                    ? (decision.action === "block" ? "拦截 · " : "放行 · ") +
-                      decision.message +
-                      (decision.matched_paths.length ? " · " + decision.matched_paths.join(", ") : "")
-                    : "输入命令后按 Enter 或点击检查，返回风险级别、处置动作和命中路径。"}
-                </p>
-              </div>
             </section>
           </div>
         )}
@@ -508,23 +450,30 @@ function GroupedProviderList({
   providers,
   runningId,
   busy,
-  onStart
+  onStart,
+  onSelectSource
 }: {
   providers: DiscoveredProvider[];
   runningId?: string;
   busy: boolean;
   onStart: (provider: DiscoveredProvider) => void;
+  onSelectSource: (source: ViewId) => void;
 }) {
   const groups = groupProviders(providers);
   return (
     <div className="providerGroups">
       {groups.map((group) => (
-        <section className="providerGroup" key={group.id} aria-labelledby={`provider-group-${group.id}`}>
+        <section className="providerGroup" key={group.safeId} aria-labelledby={`provider-group-${group.safeId}`}>
           <div className="providerGroupHeader">
             <div>
-              <h3 id={`provider-group-${group.id}`}>{group.label}</h3>
+              <h3 id={`provider-group-${group.safeId}`}>{group.label}</h3>
               <p>{group.providers.length} 个模型供应商</p>
             </div>
+            {group.viewId && (
+              <button className="groupJump" onClick={() => group.viewId && onSelectSource(group.viewId)}>
+                查看这一类
+              </button>
+            )}
           </div>
           <div className="providerGroupRows">
             {group.providers.map((provider) => (
@@ -675,11 +624,17 @@ function groupProviders(providers: DiscoveredProvider[]) {
       const right = order.indexOf(b);
       return (left === -1 ? 99 : left) - (right === -1 ? 99 : right) || a.localeCompare(b);
     })
-    .map(([id, items]) => ({ id: sourceClass(id), label: labels[id] || `${items[0]?.source_label || id} 模型供应商`, providers: items }));
+    .map(([id, items]) => ({
+      id,
+      safeId: sourceClass(id),
+      viewId: isSourceView(id) ? id : undefined,
+      label: labels[id] || `${items[0]?.source_label || id} 模型供应商`,
+      providers: items
+    }));
 }
 
-function riskLabel(severity: string) {
-  return ({ info: "无风险", low: "低", medium: "中", high: "高", critical: "严重" } as Record<string, string>)[severity] || severity;
+function isSourceView(source: string): source is ViewId {
+  return source === "ccswitch" || source === "codexplusplus" || source === "codex-config";
 }
 
 function sourceClass(source: string) {

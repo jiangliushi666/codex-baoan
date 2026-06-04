@@ -355,7 +355,7 @@ select,
 .contentStack {
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(240px, 1fr) auto;
+  grid-template-rows: auto minmax(240px, 1fr);
   gap: 12px;
   animation: riseIn 300ms ease both;
 }
@@ -468,6 +468,25 @@ select,
   color: var(--muted);
   font-size: 12px;
   font-weight: 720;
+}
+
+.groupJump {
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid #cfe8d7;
+  border-radius: 8px;
+  color: var(--accent-dark);
+  background: var(--surface-strong);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.groupJump:hover {
+  transform: translateY(-1px);
+  border-color: #9bcab1;
+  background: var(--accent-soft);
 }
 
 .providerGroupRows {
