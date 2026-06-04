@@ -4,10 +4,9 @@
   "description": "Codex 保安: Tauri desktop guard for Codex provider monitoring.",
   "type": "module",
   "scripts": {
-    "dev": "pnpm tauri dev",
+    "dev": "pnpm run build:renderer && pnpm tauri dev",
     "build": "pnpm tauri build",
     "tauri": "tauri",
-    "dev:renderer": "vite --host 127.0.0.1 --port 3000",
     "build:renderer": "vite build",
     "typecheck": "tsc --noEmit"
   },

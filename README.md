@@ -20,11 +20,11 @@ Tauri 会生成标准桌面安装产物：
 
 ## 开发运行
 
-本项目使用 pnpm + Tauri：
+本项目使用 pnpm + Tauri。开发启动也先构建本地 `dist/`，再启动 Tauri 桌面窗口；不会暴露浏览器网页入口：
 
 ```bash
 pnpm install
-pnpm tauri dev
+pnpm run dev
 ```
 
 类型检查：
