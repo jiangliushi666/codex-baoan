@@ -2,7 +2,7 @@
 
 Codex 保安是一个 Tauri 2 桌面应用：Rust 后端负责本机配置发现、保护状态和命令风险检查，React/TypeScript 前端负责桌面界面展示。它是标准桌面应用，不是浏览器页面、脚本壳或插件包装。
 
-目标是让普通用户在使用未知模型中转站时，不需要手动填写 Base URL / API Key，就能看到 Codex 连接了哪些上游、当前保护是否启用、命令风险是否命中，并能通过清晰的桌面界面完成安装、升级和卸载入口操作。
+目标是让普通用户在使用未知模型中转站时，不需要手动填写 Base URL / API Key，就能看到 Codex 连接了哪些模型供应商、当前保护是否启用、命令风险是否命中，并能通过清晰的桌面界面完成安装、升级和卸载入口操作。
 
 ## 普通用户安装
 
@@ -47,7 +47,7 @@ src-tauri/target/release/bundle/
 
 ## 自动发现
 
-启动后会自动扫描本机已有配置，成功时直接在 provider 列表里显示，不要求用户手填密钥。
+启动后会自动扫描本机已有配置，成功时直接按来源分组展示模型供应商，不要求用户手填密钥。
 
 - ccswitch: `%APPDATA%\cc-switch\cc-switch.db`、`~/.cc-switch/cc-switch.db`
 - Codex++: `~/.codex-session-delete/settings.json` 及常见 AppData/config 目录
@@ -57,7 +57,7 @@ src-tauri/target/release/bundle/
 
 ## 当前能力
 
-- ccswitch 风格的桌面窗口、顶部切换、provider 大行列表、右侧设置抽屉。
+- ccswitch 风格的桌面窗口、左侧固定导航、右侧可滚动内容区、按来源分组的模型供应商列表。
 - 一键启用/停止保护状态，自动选择推荐 provider。
 - 自动发现 ccswitch、Codex++、Codex 的默认配置位置。
 - 命令风险检查：识别密钥目录、环境文件、网络传输、删除命令等高危行为。

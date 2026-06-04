@@ -28,10 +28,10 @@ const emptyState: AppState = {
 };
 
 const navItems: Array<{ id: ViewId; label: string; hint: string }> = [
-  { id: "all", label: "全部上游", hint: "所有来源" },
-  { id: "ccswitch", label: "ccswitch", hint: "数据库发现" },
-  { id: "codexplusplus", label: "Codex++", hint: "扩展配置" },
-  { id: "codex-config", label: "Codex 配置", hint: "原生配置" },
+  { id: "all", label: "全部供应商", hint: "按来源分组" },
+  { id: "ccswitch", label: "ccswitch", hint: "模型供应商" },
+  { id: "codexplusplus", label: "Codex++", hint: "模型供应商" },
+  { id: "codex-config", label: "Codex 配置", hint: "模型供应商" },
   { id: "status", label: "状态", hint: "运行概览" }
 ];
 
@@ -96,7 +96,7 @@ export function App() {
   async function start(provider?: DiscoveredProvider) {
     const target = provider || recommended || state.discovery.providers.find((item) => item.status !== "unconfigured");
     if (!target) {
-      setError("没有发现可用上游，请先在 ccswitch、Codex++ 或 Codex 中配置 provider 后重新扫描。");
+      setError("没有发现可用模型供应商，请先在 ccswitch、Codex++ 或 Codex 中配置 provider 后重新扫描。");
       return;
     }
     setActionBusy(true);
@@ -195,7 +195,7 @@ export function App() {
 
   const readyCount = state.discovery.providers.filter((provider) => provider.status === "ready").length;
   const currentView = navItems.find((item) => item.id === activeTab) || navItems[0];
-  const primaryActionLabel = state.runtime.running ? "停止本地保护" : "启动推荐上游保护";
+  const primaryActionLabel = state.runtime.running ? "停止本地保护" : "启动推荐模型供应商保护";
 
   return (
     <main className="appShell">
@@ -210,7 +210,7 @@ export function App() {
           </div>
         </div>
 
-        <nav className="navList" aria-label="上游来源筛选">
+        <nav className="navList" aria-label="模型供应商来源筛选">
           {navItems.map((item) => (
             <button
               key={item.id}
@@ -297,7 +297,7 @@ export function App() {
         <section className="metrics" aria-label="运行指标">
           <Metric
             icon={<Server size={18} />}
-            label="上游"
+            label="模型供应商"
             value={loading ? "…" : state.discovery.providers.length}
             detail={loading ? "扫描中" : `${readyCount} 个可用`}
           />
@@ -326,8 +326,10 @@ export function App() {
                   {loading
                     ? "正在扫描本机配置…"
                     : providers.length
-                      ? `${providers.length} 个匹配上游`
-                      : "没有匹配上游"}
+                      ? activeTab === "all"
+                        ? `${providers.length} 个模型供应商，已按来源分组`
+                        : `${providers.length} 个模型供应商`
+                      : "没有匹配的模型供应商"}
                 </p>
               </div>
               <div className="sourcePills" aria-label="来源扫描结果">
@@ -346,15 +348,24 @@ export function App() {
               {loading ? (
                 <LoadingRow />
               ) : providers.length ? (
-                providers.map((provider) => (
-                  <ProviderRow
-                    key={provider.id}
-                    provider={provider}
+                activeTab === "all" ? (
+                  <GroupedProviderList
+                    providers={providers}
                     runningId={state.runtime.provider_id}
                     busy={actionBusy}
-                    onStart={() => start(provider)}
+                    onStart={start}
                   />
-                ))
+                ) : (
+                  providers.map((provider) => (
+                    <ProviderRow
+                      key={provider.id}
+                      provider={provider}
+                      runningId={state.runtime.provider_id}
+                      busy={actionBusy}
+                      onStart={() => start(provider)}
+                    />
+                  ))
+                )
               ) : (
                 <EmptyRow scanning={scanning} onRescan={() => refresh("已重新扫描")} />
               )}
@@ -493,6 +504,45 @@ function Metric({
   );
 }
 
+function GroupedProviderList({
+  providers,
+  runningId,
+  busy,
+  onStart
+}: {
+  providers: DiscoveredProvider[];
+  runningId?: string;
+  busy: boolean;
+  onStart: (provider: DiscoveredProvider) => void;
+}) {
+  const groups = groupProviders(providers);
+  return (
+    <div className="providerGroups">
+      {groups.map((group) => (
+        <section className="providerGroup" key={group.id} aria-labelledby={`provider-group-${group.id}`}>
+          <div className="providerGroupHeader">
+            <div>
+              <h3 id={`provider-group-${group.id}`}>{group.label}</h3>
+              <p>{group.providers.length} 个模型供应商</p>
+            </div>
+          </div>
+          <div className="providerGroupRows">
+            {group.providers.map((provider) => (
+              <ProviderRow
+                key={provider.id}
+                provider={provider}
+                runningId={runningId}
+                busy={busy}
+                onStart={() => onStart(provider)}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 function ProviderRow({
   provider,
   runningId,
@@ -531,7 +581,7 @@ function ProviderRow({
           {provider.is_recommended && <span className="subtleBadge">推荐</span>}
           {provider.is_current && <span className="subtleBadge">当前</span>}
         </div>
-        <p title={provider.source_path}>{provider.base_url || "未配置上游 URL"}</p>
+        <p title={provider.source_path}>{provider.base_url || "未配置模型供应商 URL"}</p>
         <div className="providerDetails">
           <span>{provider.source_label}</span>
           <span>{provider.model || provider.protocol || "Codex"}</span>
@@ -568,7 +618,7 @@ function EmptyRow({ scanning, onRescan }: { scanning: boolean; onRescan: () => v
         <div className="titleLine">
           <h3>没有来源</h3>
         </div>
-        <p>安装 ccswitch / Codex++ 或配置 Codex 后重新扫描。</p>
+        <p>安装 ccswitch / Codex++ 或配置 Codex 后重新扫描模型供应商。</p>
       </div>
       <button className="rowAction" disabled={scanning} onClick={onRescan}>
         {scanning ? <Loader2 size={15} className="spin" /> : <RefreshCw size={15} />}
@@ -605,6 +655,27 @@ function StatusPanel({ state }: { state: AppState }) {
 
 function providerStatus(status: string) {
   return ({ ready: "可用", "needs-auth": "需要登录", unconfigured: "未配置" } as Record<string, string>)[status] || status;
+}
+
+function groupProviders(providers: DiscoveredProvider[]) {
+  const labels: Record<string, string> = {
+    ccswitch: "ccswitch 模型供应商",
+    codexplusplus: "Codex++ 模型供应商",
+    "codex-config": "Codex 配置模型供应商"
+  };
+  const order = ["ccswitch", "codexplusplus", "codex-config"];
+  const grouped = new Map<string, DiscoveredProvider[]>();
+  for (const provider of providers) {
+    const key = provider.source || "unknown";
+    grouped.set(key, [...(grouped.get(key) || []), provider]);
+  }
+  return [...grouped.entries()]
+    .sort(([a], [b]) => {
+      const left = order.indexOf(a);
+      const right = order.indexOf(b);
+      return (left === -1 ? 99 : left) - (right === -1 ? 99 : right) || a.localeCompare(b);
+    })
+    .map(([id, items]) => ({ id: sourceClass(id), label: labels[id] || `${items[0]?.source_label || id} 模型供应商`, providers: items }));
 }
 
 function riskLabel(severity: string) {

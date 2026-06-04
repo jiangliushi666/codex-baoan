@@ -420,8 +420,7 @@ select,
 .providerList {
   min-height: 0;
   overflow: auto;
-  display: grid;
-  align-content: start;
+  display: block;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.72);
@@ -433,6 +432,51 @@ select,
 .workspace::-webkit-scrollbar-thumb,
 .providerList::-webkit-scrollbar-thumb,
 .drawer::-webkit-scrollbar-thumb { background: #cbd5cd; border-radius: 999px; border: 3px solid #f7f9f5; }
+
+.providerGroups {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 12px;
+}
+
+.providerGroup {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(251, 252, 248, 0.74);
+}
+
+.providerGroupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #eef4ee;
+  border-bottom: 1px solid var(--line);
+}
+
+.providerGroupHeader h3 {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 820;
+}
+
+.providerGroupHeader p {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.providerGroupRows {
+  display: grid;
+}
+
+.providerGroupRows .providerRow:last-child {
+  border-bottom: 0;
+}
 
 .providerRow {
   min-height: 92px;
