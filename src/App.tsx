@@ -3,12 +3,15 @@ import {
   Activity,
   AlertTriangle,
   CheckCircle2,
+  Database,
   Download,
+  FileCog,
   FolderOpen,
   Gauge,
   Loader2,
   Play,
   RefreshCw,
+  Repeat2,
   Server,
   Settings,
   ShieldCheck,
@@ -466,7 +469,7 @@ function GroupedProviderList({
         <section className="providerGroup" key={group.safeId} aria-labelledby={`provider-group-${group.safeId}`}>
           <div className="providerGroupHeader">
             <div className={["providerGroupIcon", sourceClass(group.id)].join(" ")} aria-hidden="true">
-              {sourceGlyph(group.id)}
+              <SourceIcon source={group.id} size={18} />
             </div>
             <div className="providerGroupTitle">
               <h3 id={`provider-group-${group.safeId}`}>{group.label}</h3>
@@ -522,7 +525,7 @@ function ProviderRow({
       aria-current={running ? "true" : undefined}
     >
       <div className={["providerIcon", sourceClass(provider.source)].join(" ")} aria-hidden="true">
-        {sourceGlyph(provider.source)}
+        <SourceIcon source={provider.source} size={18} />
       </div>
       <div className="providerMain">
         <div className="titleLine">
@@ -644,6 +647,9 @@ function sourceClass(source: string) {
   return source.replace(/[^a-z0-9_-]/gi, "-");
 }
 
-function sourceGlyph(source: string) {
-  return ({ ccswitch: "C", codexplusplus: "++", "codex-config": "⌘" } as Record<string, string>)[source] || "•";
+function SourceIcon({ source, size = 18 }: { source: string; size?: number }) {
+  if (source === "ccswitch") return <Database size={size} strokeWidth={2.4} />;
+  if (source === "codexplusplus") return <Repeat2 size={size} strokeWidth={2.4} />;
+  if (source === "codex-config") return <FileCog size={size} strokeWidth={2.4} />;
+  return <Server size={size} strokeWidth={2.4} />;
 }
