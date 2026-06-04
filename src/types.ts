@@ -2,6 +2,9 @@ export type SourceStatus = "ok" | "missing" | "error";
 export type ProviderStatus = "ready" | "needs-auth" | "unconfigured";
 export type GuardMode = "audit" | "block";
 export type Severity = "info" | "low" | "medium" | "high" | "critical";
+export type KnownProviderSource = "ccswitch" | "codexplusplus" | "codex-config";
+export type ProviderSource = KnownProviderSource | (string & {});
+export type ViewId = "all" | KnownProviderSource | "status";
 
 export interface DiscoverySourceReport {
   id: string;
@@ -15,7 +18,7 @@ export interface DiscoverySourceReport {
 
 export interface DiscoveredProvider {
   id: string;
-  source: string;
+  source: ProviderSource;
   source_label: string;
   source_path: string;
   native_id: string;

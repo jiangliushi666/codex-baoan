@@ -13,12 +13,11 @@
     "windows": [
       {
         "label": "main",
-        "title": "",
-        "titleBarStyle": "Overlay",
-        "width": 1000,
-        "height": 650,
-        "minWidth": 900,
-        "minHeight": 600,
+        "title": "Codex 保安",
+        "width": 1040,
+        "height": 720,
+        "minWidth": 760,
+        "minHeight": 560,
         "visible": false,
         "resizable": true,
         "fullscreen": false,
