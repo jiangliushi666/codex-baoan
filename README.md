@@ -1,51 +1,57 @@
 # Codex 保安
 
-Codex 保安是一个外置的 Codex 桌面保护工具，第一版按 ccswitch 的技术路线重做：Tauri 2 + Rust 后端 + React/TypeScript 前端 + Tauri bundler。它是标准桌面应用，不是浏览器页面或临时脚本壳。
+Codex 保安是一个 Tauri 2 桌面应用：Rust 后端负责本机配置发现、保护状态和命令风险检查，React/TypeScript 前端负责桌面界面展示。它是标准桌面应用，不是浏览器页面、脚本壳或插件包装。
 
-它的目标是让普通用户在使用未知模型中转站时，不需要手动填写 Base URL / API Key，就能看到 Codex 连接了哪些上游、当前保护是否启用、命令风险是否命中，并能通过清晰的桌面界面完成安装、升级和卸载入口操作。
+目标是让普通用户在使用未知模型中转站时，不需要手动填写 Base URL / API Key，就能看到 Codex 连接了哪些上游、当前保护是否启用、命令风险是否命中，并能通过清晰的桌面界面完成安装、升级和卸载入口操作。
 
 ## 普通用户安装
 
-从 GitHub Releases 下载最新 Windows 安装包，双击安装：
+从 GitHub Releases 下载最新安装包：
 
 https://github.com/jiangliushi666/codex-baoan/releases/latest
 
-Tauri 会生成标准桌面安装产物，发布后安装包位于：
+Tauri 会生成标准桌面安装产物：
 
-- Windows: .exe / .msi
-- macOS: .dmg
-- Linux: .AppImage / .deb / .rpm
+- Windows: `.exe` / `.msi`
+- macOS: `.dmg`
+- Linux: `.AppImage` / `.deb` / `.rpm`
 
 卸载走系统应用管理。Windows 用户可以在应用右侧设置抽屉里点击“卸载入口”，或打开“设置 > 应用 > 已安装的应用”。升级时下载最新 Release 安装包覆盖安装。
 
 ## 开发运行
 
-本项目与 ccswitch 一样使用 pnpm + Tauri：
+本项目使用 pnpm + Tauri：
 
-`ash
+```bash
 pnpm install
 pnpm tauri dev
-`
+```
+
+类型检查：
+
+```bash
+pnpm run typecheck
+```
 
 构建安装包：
 
-`ash
+```bash
 pnpm tauri build
-`
+```
 
 本地构建产物会出现在：
 
-`	ext
+```text
 src-tauri/target/release/bundle/
-`
+```
 
 ## 自动发现
 
 启动后会自动扫描本机已有配置，成功时直接在 provider 列表里显示，不要求用户手填密钥。
 
-- ccswitch: %APPDATA%\cc-switch\cc-switch.db、~/.cc-switch/cc-switch.db
-- Codex++: ~/.codex-session-delete/settings.json 及常见 AppData/config 目录
-- Codex: ~/.codex/config.toml
+- ccswitch: `%APPDATA%\cc-switch\cc-switch.db`、`~/.cc-switch/cc-switch.db`
+- Codex++: `~/.codex-session-delete/settings.json` 及常见 AppData/config 目录
+- Codex: `~/.codex/config.toml`
 
 读取到的 API Key 只在 Rust 后端用于判断可用性，前端只显示脱敏结果。
 
@@ -60,8 +66,8 @@ src-tauri/target/release/bundle/
 
 ## 后续路线
 
-- 接入签名 Tauri updater，发布 latest.json 实现应用内升级。
-- 增加 Codex CLI wrapper 与本地代理，捕获完整模型响应和工具调用。
+- 接入签名 Tauri updater，发布 `latest.json` 实现应用内升级。
+- 增加本地代理或 CLI wrapper，捕获完整模型响应和工具调用。
 - 对 Codex App 做更深的进程/网络层监控，在可路由路径中执行拦截策略。
 - 引入持久化会话日志，展示清晰的告警时间线。
 
