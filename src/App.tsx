@@ -465,7 +465,10 @@ function GroupedProviderList({
       {groups.map((group) => (
         <section className="providerGroup" key={group.safeId} aria-labelledby={`provider-group-${group.safeId}`}>
           <div className="providerGroupHeader">
-            <div>
+            <div className={["providerGroupIcon", sourceClass(group.id)].join(" ")} aria-hidden="true">
+              {sourceGlyph(group.id)}
+            </div>
+            <div className="providerGroupTitle">
               <h3 id={`provider-group-${group.safeId}`}>{group.label}</h3>
               <p>{group.providers.length} 个模型供应商</p>
             </div>
@@ -519,7 +522,7 @@ function ProviderRow({
       aria-current={running ? "true" : undefined}
     >
       <div className={["providerIcon", sourceClass(provider.source)].join(" ")} aria-hidden="true">
-        {provider.source === "ccswitch" ? "C" : provider.source === "codexplusplus" ? "++" : "~"}
+        {sourceGlyph(provider.source)}
       </div>
       <div className="providerMain">
         <div className="titleLine">
@@ -639,4 +642,8 @@ function isSourceView(source: string): source is ViewId {
 
 function sourceClass(source: string) {
   return source.replace(/[^a-z0-9_-]/gi, "-");
+}
+
+function sourceGlyph(source: string) {
+  return ({ ccswitch: "C", codexplusplus: "++", "codex-config": "⌘" } as Record<string, string>)[source] || "•";
 }
