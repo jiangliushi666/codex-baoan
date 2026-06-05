@@ -13,6 +13,8 @@ import {
   Globe,
   Layers,
   Loader2,
+  Monitor,
+  Moon,
   Play,
   RefreshCw,
   Settings,
@@ -20,12 +22,18 @@ import {
   ShieldAlert,
   ShieldCheck,
   Square,
+  Sun,
   Terminal,
   Trash2,
   X
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ActivityEvent, ActivityFilter, ActivityKind, AppState, DiscoveredProvider, GuardMode } from "./types";
+
+type Theme = "light" | "dark" | "system";
+type KpiTone = "primary" | "neutral" | "danger" | "calm";
+
+const THEME_KEY = "cgx-theme";
 
 const emptyState: AppState = {
   app: { version: "0.2.0", install_dir: "", bundle_managed: true, updater_configured: false },
@@ -45,11 +53,18 @@ const filters: Array<{ id: ActivityFilter; label: string }> = [
   { id: "risk", label: "高危" }
 ];
 
+function readTheme(): Theme {
+  if (typeof localStorage === "undefined") return "system";
+  const saved = localStorage.getItem(THEME_KEY);
+  return saved === "light" || saved === "dark" || saved === "system" ? saved : "system";
+}
+
 export function App() {
   const [state, setState] = useState<AppState>(emptyState);
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mode, setMode] = useState<GuardMode>("audit");
+  const [theme, setTheme] = useState<Theme>(readTheme);
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -202,6 +217,22 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    const root = document.documentElement;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => root.classList.toggle("dark", theme === "dark" || (theme === "system" && mq.matches));
+    apply();
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch {
+      /* ignore */
+    }
+    if (theme === "system") {
+      mq.addEventListener("change", apply);
+      return () => mq.removeEventListener("change", apply);
+    }
+  }, [theme]);
+
+  useEffect(() => {
     for (const node of [railRef.current, stageRef.current]) {
       if (!node) continue;
       if (settingsOpen) node.setAttribute("inert", "");
@@ -230,7 +261,7 @@ export function App() {
       <aside className="rail" ref={railRef}>
         <header className="brand">
           <span className="brand__mark" aria-hidden="true">
-            <ShieldCheck size={22} strokeWidth={2.4} />
+            <ShieldCheck size={20} strokeWidth={2.5} />
           </span>
           <span className="brand__text">
             <strong>Codex 保安</strong>
@@ -238,24 +269,8 @@ export function App() {
           </span>
         </header>
 
-        <section className="upstreamChip" aria-label="当前 Codex 上游">
-          <span className="railLabel">当前 Codex 上游</span>
-          {activeUpstream ? (
-            <div className="upstreamChip__body">
-              <SourceLogo source={activeUpstream.source} size={32} />
-              <span className="upstreamChip__meta">
-                <strong>{activeUpstream.name}</strong>
-                <small>{activeUpstream.source_label}</small>
-              </span>
-              <span className={["dot", providerDotClass(activeUpstream.status)].join(" ")} aria-hidden="true" />
-            </div>
-          ) : (
-            <p className="upstreamChip__empty">未检测到正在使用的供应商</p>
-          )}
-        </section>
-
         <nav className="filters" aria-label="按活动类型筛选">
-          <span className="railLabel">活动筛选</span>
+          <span className="railLabel filters__label">活动筛选</span>
           {filters.map((item) => {
             const active = activityFilter === item.id;
             return (
@@ -277,11 +292,11 @@ export function App() {
 
         <footer className="rail__foot">
           <div className={["modePill", mode === "block" ? "is-block" : ""].join(" ")}>
-            <span className="railLabel">保护策略</span>
-            <strong>
-              {mode === "block" ? <Shield size={14} /> : <Eye size={14} />}
-              {mode === "block" ? "严格告警" : "仅记录"}
-            </strong>
+            {mode === "block" ? <Shield size={14} /> : <Eye size={14} />}
+            <span>
+              <small>保护策略</small>
+              <strong>{mode === "block" ? "严格告警" : "仅记录"}</strong>
+            </span>
           </div>
           <button
             ref={settingsButtonRef}
@@ -298,35 +313,18 @@ export function App() {
       </aside>
 
       <section className="stage" ref={stageRef}>
-        <header className="statusbar">
-          <div className="statusbar__state">
-            <span
-              className={["pulse", running ? "is-online" : ""].join(" ")}
-              role="img"
-              aria-label={running ? "监控运行中" : "监控未启用"}
-            />
-            <span className="statusbar__text">
-              <small>{running ? "Codex 监控运行中" : loading ? "正在初始化" : activeUpstream ? "监控未启用" : "未检测到上游"}</small>
-              <strong>
-                {running
-                  ? state.runtime.provider_name
-                  : loading
-                    ? "正在读取本机配置…"
-                    : activeUpstream
-                      ? `已就绪 · ${activeUpstream.name}`
-                      : "请先启用一个 Codex 供应商"}
-              </strong>
-            </span>
-          </div>
-          <div className="statusbar__actions">
+        <header className="topbar">
+          <UpstreamBar loading={loading} upstream={activeUpstream} sources={state.discovery.sources} running={running} fallback={state.discovery.manual_fallback_reason} />
+          <div className="topbar__actions">
             <button
-              className="btn btn--icon"
-              title="重新扫描本机配置"
+              className="btn btn--soft"
+              title="切换供应商后点此重新扫描本机配置"
               aria-label="重新扫描本机配置"
               disabled={scanning || loading}
               onClick={() => refresh("已重新扫描本机配置")}
             >
-              <RefreshCw size={17} className={scanning ? "spin" : ""} />
+              <RefreshCw size={15} className={scanning ? "spin" : ""} />
+              重新扫描
             </button>
             <button
               className={["btn", running ? "btn--stop" : "btn--primary"].join(" ")}
@@ -334,7 +332,7 @@ export function App() {
               aria-label={primaryActionLabel}
               onClick={() => (running ? stop() : start())}
             >
-              {actionBusy ? <Loader2 size={16} className="spin" /> : running ? <Square size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" />}
+              {actionBusy ? <Loader2 size={16} className="spin" /> : running ? <Square size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
               {actionBusy ? "处理中…" : running ? "停止监控" : "启动监控"}
             </button>
           </div>
@@ -351,43 +349,22 @@ export function App() {
         )}
 
         <section className="kpis" aria-label="监控概览">
-          <Kpi
-            tone="accent"
-            icon={<Activity size={17} />}
-            label="活动事件"
-            value={loading ? "—" : stats.total}
-            detail={`${stats.commands} 命令 · ${stats.network} 网络`}
-          />
-          <Kpi
-            tone="info"
-            icon={<FileStack size={17} />}
-            label="文件改动"
-            value={loading ? "—" : stats.files}
-            detail={`读 ${stats.reads} · 改 ${stats.modifies} · 删 ${stats.deletes}`}
-          />
-          <Kpi
-            tone={stats.risks ? "danger" : "calm"}
-            icon={<ShieldAlert size={17} />}
-            label="风险命中"
-            value={loading ? "—" : stats.risks}
-            detail={mode === "block" ? "高危重点告警" : "高危仅记录告警"}
-          />
+          <Kpi tone="primary" icon={<Activity size={17} />} label="活动事件" value={loading ? "—" : stats.total} detail={`${stats.commands} 命令 · ${stats.network} 网络`} />
+          <Kpi tone="neutral" icon={<FileStack size={17} />} label="文件改动" value={loading ? "—" : stats.files} detail={`读 ${stats.reads} · 改 ${stats.modifies} · 删 ${stats.deletes}`} />
+          <Kpi tone={stats.risks ? "danger" : "calm"} icon={<ShieldAlert size={17} />} label="风险命中" value={loading ? "—" : stats.risks} detail={mode === "block" ? "高危重点告警" : "高危仅记录告警"} />
         </section>
 
-        <section className="board">
-          <UpstreamCard loading={loading} upstream={activeUpstream} sources={state.discovery.sources.length} running={running} />
-          <section className="feed">
-            <div className="feed__head">
-              <div>
-                <h2>执行记录</h2>
-                <p>命令、文件读取 / 新建 / 修改 / 删除、网络请求都会进入这里，当前显示 {filteredActivity.length} 条。</p>
-              </div>
-              <button className="btn btn--ghost btn--sm" disabled={!state.activity.length} onClick={clearActivity}>
-                <Trash2 size={14} /> 清空
-              </button>
+        <section className="feed">
+          <div className="feed__head">
+            <div>
+              <h2>执行记录</h2>
+              <p>命令、文件读取 / 新建 / 修改 / 删除、网络请求会按时间汇总在这里，当前显示 {filteredActivity.length} 条。</p>
             </div>
-            <ActivityTimeline events={filteredActivity} loading={loading} filtered={activityFilter !== "all"} />
-          </section>
+            <button className="btn btn--ghost btn--sm" disabled={!state.activity.length} onClick={clearActivity}>
+              <Trash2 size={14} /> 清空
+            </button>
+          </div>
+          <ActivityTimeline events={filteredActivity} loading={loading} filtered={activityFilter !== "all"} />
         </section>
       </section>
 
@@ -405,6 +382,21 @@ export function App() {
               </button>
             </div>
 
+            <div className="field">
+              <span className="railLabel">外观主题</span>
+              <div className="segmented" role="group" aria-label="主题">
+                <button className={theme === "light" ? "is-active" : ""} aria-pressed={theme === "light"} onClick={() => setTheme("light")}>
+                  <Sun size={15} /> 浅色
+                </button>
+                <button className={theme === "dark" ? "is-active" : ""} aria-pressed={theme === "dark"} onClick={() => setTheme("dark")}>
+                  <Moon size={15} /> 深色
+                </button>
+                <button className={theme === "system" ? "is-active" : ""} aria-pressed={theme === "system"} onClick={() => setTheme("system")}>
+                  <Monitor size={15} /> 跟随系统
+                </button>
+              </div>
+            </div>
+
             <label className="field">
               <span className="railLabel">保护模式</span>
               <select value={mode} onChange={(event) => setMode(event.target.value as GuardMode)}>
@@ -417,9 +409,7 @@ export function App() {
             <section className="manage">
               <div className="manage__head">
                 <h3>应用管理</h3>
-                <span className={["tag", state.app.bundle_managed ? "tag--ok" : "tag--muted"].join(" ")}>
-                  {state.app.bundle_managed ? "正式安装" : "开发模式"}
-                </span>
+                <span className={["tag", state.app.bundle_managed ? "tag--ok" : "tag--muted"].join(" ")}>{state.app.bundle_managed ? "正式安装" : "开发模式"}</span>
               </div>
               <div className="manage__grid">
                 <button className="btn btn--soft" disabled={managementBusy !== null} onClick={() => runManaged("releases", "已打开安装包页面", () => invoke("open_releases"))}>
@@ -454,7 +444,80 @@ export function App() {
   );
 }
 
-function Kpi({ tone, icon, label, value, detail }: { tone: string; icon: React.ReactNode; label: string; value: React.ReactNode; detail: React.ReactNode }) {
+function UpstreamBar({
+  loading,
+  upstream,
+  sources,
+  running,
+  fallback
+}: {
+  loading: boolean;
+  upstream?: DiscoveredProvider;
+  sources: AppState["discovery"]["sources"];
+  running: boolean;
+  fallback: string;
+}) {
+  if (loading) {
+    return (
+      <div className="upstreamBar upstreamBar--plain">
+        <span className="pulse" aria-hidden="true" />
+        <div className="upstreamBar__info">
+          <small>正在初始化</small>
+          <strong>正在读取本机配置…</strong>
+        </div>
+      </div>
+    );
+  }
+  if (!upstream) {
+    return (
+      <div className="upstreamBar upstreamBar--plain">
+        <span className="upstreamBar__logo muted" aria-hidden="true"><Shield size={20} /></span>
+        <div className="upstreamBar__info">
+          <small>未检测到上游</small>
+          <strong>请先启用一个 Codex 供应商</strong>
+          <p className="upstreamBar__hint">{fallback}</p>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="upstreamBar">
+      <span className={["upstreamBar__logo", sourceClass(upstream.source)].join(" ")} aria-hidden="true">
+        <SourceLogo source={upstream.source} size={26} />
+      </span>
+      <div className="upstreamBar__info">
+        <div className="upstreamBar__title">
+          <span className="pulse-inline">
+            <span className={["pulse", running ? "is-online" : ""].join(" ")} role="img" aria-label={running ? "监控运行中" : "监控未启用"} />
+          </span>
+          <strong>{upstream.name}</strong>
+          <span className={["badge", running ? "badge--live" : "badge--idle"].join(" ")}>{running ? "监控中" : "未监控"}</span>
+          <span className={["tag", upstream.status === "ready" ? "tag--ok" : "tag--muted"].join(" ")}>{providerStatus(upstream.status)}</span>
+        </div>
+        <div className="upstreamBar__meta">
+          <code className="upstreamBar__url" title={upstream.source_path}>{upstream.base_url || "登录态 / 本地配置"}</code>
+          <span className="sep" aria-hidden="true" />
+          <span>{upstream.model || upstream.protocol || "Codex"}</span>
+          <span className="sep" aria-hidden="true" />
+          <span>{upstream.has_api_key ? upstream.masked_api_key || "已配置 Key" : "登录态"}</span>
+        </div>
+        {!!sources.length && (
+          <div className="upstreamBar__sources">
+            <span className="srcLabel">配置来源</span>
+            {sources.map((source) => (
+              <span key={source.id} className={["srcChip", sourceClass(source.id)].join(" ")} title={source.path}>
+                <SourceLogo source={source.id} size={13} />
+                {source.label}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Kpi({ tone, icon, label, value, detail }: { tone: KpiTone; icon: React.ReactNode; label: string; value: React.ReactNode; detail: React.ReactNode }) {
   return (
     <article className={["kpi", `kpi--${tone}`].join(" ")}>
       <span className="kpi__icon" aria-hidden="true">{icon}</span>
@@ -464,61 +527,6 @@ function Kpi({ tone, icon, label, value, detail }: { tone: string; icon: React.R
         <small className="kpi__detail">{detail}</small>
       </span>
     </article>
-  );
-}
-
-function UpstreamCard({ loading, upstream, sources, running }: { loading: boolean; upstream?: DiscoveredProvider; sources: number; running: boolean }) {
-  if (loading) {
-    return (
-      <article className="upstream upstream--loading">
-        <Loader2 size={20} className="spin" />
-        <span>正在扫描本机配置…</span>
-      </article>
-    );
-  }
-  if (!upstream) {
-    return (
-      <article className="upstream upstream--empty">
-        <span className="upstream__logo muted" aria-hidden="true"><Shield size={26} /></span>
-        <h3>没有检测到当前上游</h3>
-        <p>只有实际启用的 ccswitch、Codex++ 或 Codex 配置会显示在这里。保安只做监控，不管理或切换供应商。</p>
-      </article>
-    );
-  }
-  return (
-    <article className="upstream">
-      <header className="upstream__top">
-        <span className={["upstream__logo", sourceClass(upstream.source)].join(" ")} aria-hidden="true">
-          <SourceLogo source={upstream.source} size={30} />
-        </span>
-        <span className={["badge", running ? "badge--live" : "badge--idle"].join(" ")}>
-          <span className="dot" aria-hidden="true" />
-          {running ? "监控中" : "未监控"}
-        </span>
-      </header>
-      <div className="upstream__name">
-        <h3>{upstream.name}</h3>
-        <span className={["tag", upstream.status === "ready" ? "tag--ok" : "tag--muted"].join(" ")}>{providerStatus(upstream.status)}</span>
-      </div>
-      <p className="upstream__url" title={upstream.source_path}>
-        {upstream.base_url || "使用登录态或本地配置，未暴露供应商 URL"}
-      </p>
-      <dl className="upstream__meta">
-        <Meta label="来源" value={<span className={["tag", "tag--src", sourceClass(upstream.source)].join(" ")}><SourceLogo source={upstream.source} size={12} />{upstream.source_label}</span>} />
-        <Meta label="模型" value={upstream.model || upstream.protocol || "Codex"} />
-        <Meta label="凭据" value={upstream.has_api_key ? upstream.masked_api_key || "已配置 Key" : "登录态"} />
-        <Meta label="配置来源" value={`${sources} 个`} />
-      </dl>
-    </article>
-  );
-}
-
-function Meta({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="metaItem">
-      <dt>{label}</dt>
-      <dd>{value}</dd>
-    </div>
   );
 }
 
@@ -578,10 +586,6 @@ function ActivityTimeline({ events, loading, filtered }: { events: ActivityEvent
 
 function providerStatus(status: string) {
   return ({ ready: "可用", "needs-auth": "登录态", unconfigured: "未配置" } as Record<string, string>)[status] || status;
-}
-
-function providerDotClass(status: string) {
-  return ({ ready: "dot--ok", "needs-auth": "dot--warn", unconfigured: "dot--muted" } as Record<string, string>)[status] || "dot--muted";
 }
 
 function filterCount(filter: ActivityFilter, events: ActivityEvent[]) {

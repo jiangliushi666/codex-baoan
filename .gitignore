@@ -15,3 +15,5 @@ _dev_shot.py
 _shot-*.png
 screenshot_ui.py
 codex-guard-ui.png
+_icon-src.png
+_icon_gen.py
