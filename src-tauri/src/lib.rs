@@ -13,6 +13,7 @@ use tauri::Manager;
 #[derive(Default)]
 struct AppRuntime {
     runtime: Mutex<RuntimeState>,
+    activity: Mutex<Vec<ActivityEvent>>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -50,6 +51,7 @@ struct AppState {
     app: AppInfo,
     discovery: DiscoveryResult,
     runtime: RuntimeState,
+    activity: Vec<ActivityEvent>,
 }
 
 #[derive(Serialize)]
@@ -100,6 +102,33 @@ struct DiscoveredProvider {
     notes: Vec<String>,
 }
 
+#[derive(Clone, Serialize)]
+struct ActivityEvent {
+    id: String,
+    timestamp: String,
+    kind: String,
+    title: String,
+    command: Option<String>,
+    paths: Vec<String>,
+    severity: String,
+    summary: String,
+    line_delta: Option<i64>,
+    lines_added: Option<usize>,
+    lines_removed: Option<usize>,
+    source: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct FileEventInput {
+    kind: String,
+    paths: Vec<String>,
+    line_delta: Option<i64>,
+    lines_added: Option<usize>,
+    lines_removed: Option<usize>,
+    summary: Option<String>,
+    source: Option<String>,
+}
+
 #[derive(Serialize)]
 struct InspectDecision {
     severity: String,
@@ -119,6 +148,10 @@ pub fn run() {
             start_guard,
             stop_guard,
             inspect_command,
+            get_activity,
+            clear_activity,
+            record_command,
+            record_file_event,
             open_install_dir,
             open_releases,
             open_uninstall_settings
@@ -140,14 +173,10 @@ fn get_state(state: tauri::State<AppRuntime>) -> Result<AppState, String> {
 }
 
 #[tauri::command]
-fn start_guard(provider_id: String, mode: GuardMode, state: tauri::State<AppRuntime>) -> Result<AppState, String> {
+fn start_guard(mode: GuardMode, state: tauri::State<AppRuntime>) -> Result<AppState, String> {
     let discovery = discover_providers();
-    let provider = discovery
-        .providers
-        .iter()
-        .find(|item| item.id == provider_id && item.status != "unconfigured")
-        .cloned()
-        .ok_or_else(|| "Provider is not available".to_string())?;
+    let provider = select_active_provider(&discovery)
+        .ok_or_else(|| "未检测到当前 Codex 上游，请先在 ccswitch、Codex++ 或 Codex 中启用一个供应商。".to_string())?;
 
     let mut runtime = state.runtime.lock().map_err(|error| error.to_string())?;
     runtime.running = true;
@@ -171,6 +200,32 @@ fn stop_guard(state: tauri::State<AppRuntime>) -> Result<AppState, String> {
 #[tauri::command]
 fn inspect_command(command: String, mode: GuardMode) -> InspectDecision {
     evaluate_command(&command, mode)
+}
+
+#[tauri::command]
+fn get_activity(state: tauri::State<AppRuntime>) -> Result<Vec<ActivityEvent>, String> {
+    Ok(recent_activity(&state, 120)?)
+}
+
+#[tauri::command]
+fn clear_activity(state: tauri::State<AppRuntime>) -> Result<Vec<ActivityEvent>, String> {
+    let mut activity = state.activity.lock().map_err(|error| error.to_string())?;
+    activity.clear();
+    Ok(vec![])
+}
+
+#[tauri::command]
+fn record_command(command: String, state: tauri::State<AppRuntime>) -> Result<Vec<ActivityEvent>, String> {
+    let mode = state.runtime.lock().map_err(|error| error.to_string())?.mode;
+    let event = command_activity_event(&command, mode);
+    push_activity(&state, event)?;
+    recent_activity(&state, 120)
+}
+
+#[tauri::command]
+fn record_file_event(input: FileEventInput, state: tauri::State<AppRuntime>) -> Result<Vec<ActivityEvent>, String> {
+    push_activity(&state, file_activity_event(input))?;
+    recent_activity(&state, 120)
 }
 
 #[tauri::command]
@@ -198,7 +253,8 @@ fn open_uninstall_settings() -> Result<(), String> {
 
 fn build_state(state: &tauri::State<AppRuntime>) -> Result<AppState, String> {
     let runtime = state.runtime.lock().map_err(|error| error.to_string())?.clone();
-    Ok(AppState { app: app_info(), discovery: discover_providers(), runtime })
+    let activity = recent_activity(state, 120)?;
+    Ok(AppState { app: app_info(), discovery: discover_providers(), runtime, activity })
 }
 
 fn app_info() -> AppInfo {
@@ -223,21 +279,27 @@ fn discover_providers() -> DiscoveryResult {
     let mut providers = Vec::new();
 
     let (source, mut items) = discover_ccswitch(&home);
-    sources.push(source);
-    providers.append(&mut items);
+    if !items.is_empty() {
+        sources.push(source);
+        providers.append(&mut items);
+    }
     let (source, mut items) = discover_codex_plusplus(&home);
-    sources.push(source);
-    providers.append(&mut items);
+    if !items.is_empty() {
+        sources.push(source);
+        providers.append(&mut items);
+    }
     let (source, mut items) = discover_codex_config(&home);
-    sources.push(source);
-    providers.append(&mut items);
+    if !items.is_empty() {
+        sources.push(source);
+        providers.append(&mut items);
+    }
 
     mark_recommended(&mut providers);
     let recommended_provider_id = providers.iter().find(|item| item.is_recommended).map(|item| item.id.clone());
     let manual_fallback_reason = if recommended_provider_id.is_some() {
         "已自动发现可用上游。".to_string()
     } else {
-        "未发现可用上游，请先在 ccswitch、Codex++ 或 Codex 中配置 provider。".to_string()
+        "未检测到当前 Codex 上游，请先在 ccswitch、Codex++ 或 Codex 中启用一个供应商。".to_string()
     };
 
     DiscoveryResult { generated_at: Utc::now().to_rfc3339(), providers, sources, recommended_provider_id, manual_fallback_reason }
@@ -315,6 +377,7 @@ fn read_ccswitch(path: &Path) -> Result<Vec<DiscoveredProvider>, String> {
     let mut providers = Vec::new();
     for row in rows {
         let (native_id, name, settings_raw, notes, is_current) = row.map_err(|error| error.to_string())?;
+        if !is_current { continue; }
         let settings = parse_json(&settings_raw);
         let config_toml = find_string_by_keys(&settings, &["config", "configContents"]);
         let toml_info = config_toml.as_deref().map(parse_codex_toml).unwrap_or_default();
@@ -360,9 +423,10 @@ fn discover_codex_plusplus(home: &Path) -> (DiscoverySourceReport, Vec<Discovere
             let relay_base = find_string_by_keys(&settings, &["relayBaseUrl"]);
             let relay_key = find_string_by_keys(&settings, &["relayApiKey"]);
             let mut providers = Vec::new();
-            if let Some(Value::Array(profiles)) = settings.get("relayProfiles") {
+            if let (Some(active_id), Some(Value::Array(profiles))) = (active.as_deref(), settings.get("relayProfiles")) {
                 for (index, profile) in profiles.iter().enumerate() {
                     let native_id = find_string_by_keys(profile, &["id"]).unwrap_or_else(|| index.to_string());
+                    if native_id != active_id { continue; }
                     let name = find_string_by_keys(profile, &["name"]).unwrap_or_else(|| "Codex++ relay".to_string());
                     providers.push(finalize_provider(ProviderInput {
                         id: format!("codexplusplus:{}", native_id),
@@ -373,11 +437,12 @@ fn discover_codex_plusplus(home: &Path) -> (DiscoverySourceReport, Vec<Discovere
                         name,
                         base_url: first_url(vec![find_string_by_keys(profile, &["upstreamBaseUrl", "baseUrl"]), relay_base.clone()]),
                         api_key: first_string(vec![find_string_by_keys(profile, &["apiKey"]), relay_key.clone()]),
-                        is_current: active.as_deref() == Some(&native_id),
+                        is_current: true,
                         model: find_string_by_keys(profile, &["model"]),
                         protocol: find_string_by_keys(profile, &["protocol"]),
                         notes: vec![],
                     }));
+                    break;
                 }
             }
             (source_report("codexplusplus", "Codex++", &path, true, "ok", providers.len(), "Loaded Codex++ relay profiles."), providers)
@@ -455,6 +520,14 @@ fn finalize_provider(input: ProviderInput) -> DiscoveredProvider {
         protocol: input.protocol,
         notes: input.notes,
     }
+}
+
+fn select_active_provider(discovery: &DiscoveryResult) -> Option<DiscoveredProvider> {
+    ["ccswitch", "codexplusplus", "codex-config"]
+        .iter()
+        .find_map(|source| discovery.providers.iter().find(|item| item.source == *source && item.is_current && item.status != "unconfigured").cloned())
+        .or_else(|| discovery.providers.iter().find(|item| item.is_current && item.status != "unconfigured").cloned())
+        .or_else(|| discovery.providers.iter().find(|item| item.status != "unconfigured").cloned())
 }
 
 fn mark_recommended(providers: &mut [DiscoveredProvider]) {
@@ -554,6 +627,97 @@ fn mask_secret(secret: Option<&str>) -> Option<String> {
 
 fn source_report(id: &str, label: &str, path: &Path, exists: bool, status: &str, provider_count: usize, message: &str) -> DiscoverySourceReport {
     DiscoverySourceReport { id: id.into(), label: label.into(), path: path.display().to_string(), exists, status: status.into(), provider_count, message: message.into() }
+}
+
+fn recent_activity(state: &tauri::State<AppRuntime>, limit: usize) -> Result<Vec<ActivityEvent>, String> {
+    let activity = state.activity.lock().map_err(|error| error.to_string())?;
+    let start = activity.len().saturating_sub(limit);
+    Ok(activity[start..].to_vec())
+}
+
+fn push_activity(state: &tauri::State<AppRuntime>, event: ActivityEvent) -> Result<(), String> {
+    let mut activity = state.activity.lock().map_err(|error| error.to_string())?;
+    activity.push(event);
+    let keep = 500;
+    if activity.len() > keep {
+        let drop_count = activity.len() - keep;
+        activity.drain(0..drop_count);
+    }
+    Ok(())
+}
+
+fn command_activity_event(command: &str, mode: GuardMode) -> ActivityEvent {
+    let decision = evaluate_command(command, mode);
+    let lower = command.to_ascii_lowercase();
+    let kind = if decision.severity == "critical" || decision.severity == "high" {
+        "risk"
+    } else if lower.contains("curl ") || lower.contains("wget ") || lower.contains("invoke-webrequest") || lower.contains(" irm ") {
+        "network"
+    } else if lower.contains("remove-item") || lower.contains("rm ") || lower.contains("del ") {
+        "file-delete"
+    } else if lower.contains("new-item") || lower.contains("touch ") || lower.contains("mkdir ") {
+        "file-create"
+    } else if lower.contains(" >") || lower.contains("write-output") || lower.contains("set-content") || lower.contains("add-content") {
+        "file-modify"
+    } else if lower.contains("cat ") || lower.contains("type ") || lower.contains("get-content") || lower.contains(" rg ") || lower.starts_with("rg ") || lower.contains("grep ") {
+        "file-read"
+    } else {
+        "command"
+    };
+    let title = activity_title(kind);
+    ActivityEvent {
+        id: format!("evt-{}", Utc::now().timestamp_nanos_opt().unwrap_or_default()),
+        timestamp: Utc::now().to_rfc3339(),
+        kind: kind.into(),
+        title,
+        command: Some(command.to_string()),
+        paths: decision.matched_paths.clone(),
+        severity: decision.severity,
+        summary: decision.message,
+        line_delta: None,
+        lines_added: None,
+        lines_removed: None,
+        source: Some("command".into()),
+    }
+}
+
+fn file_activity_event(input: FileEventInput) -> ActivityEvent {
+    let kind = normalize_activity_kind(&input.kind);
+    let title = activity_title(&kind);
+    let path_count = input.paths.len();
+    ActivityEvent {
+        id: format!("evt-{}", Utc::now().timestamp_nanos_opt().unwrap_or_default()),
+        timestamp: Utc::now().to_rfc3339(),
+        kind,
+        title,
+        command: None,
+        paths: input.paths,
+        severity: "info".into(),
+        summary: input.summary.unwrap_or_else(|| format!("记录了 {} 个文件活动", path_count)),
+        line_delta: input.line_delta,
+        lines_added: input.lines_added,
+        lines_removed: input.lines_removed,
+        source: input.source,
+    }
+}
+
+fn normalize_activity_kind(kind: &str) -> String {
+    match kind {
+        "file-read" | "file-create" | "file-delete" | "file-modify" | "network" | "risk" | "command" => kind.into(),
+        _ => "command".into(),
+    }
+}
+
+fn activity_title(kind: &str) -> String {
+    match kind {
+        "file-read" => "读取文件".into(),
+        "file-create" => "新建文件".into(),
+        "file-delete" => "删除文件".into(),
+        "file-modify" => "修改文件".into(),
+        "network" => "网络请求".into(),
+        "risk" => "高危命令".into(),
+        _ => "执行命令".into(),
+    }
 }
 
 fn evaluate_command(command: &str, mode: GuardMode) -> InspectDecision {

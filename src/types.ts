@@ -4,7 +4,8 @@ export type GuardMode = "audit" | "block";
 export type Severity = "info" | "low" | "medium" | "high" | "critical";
 export type KnownProviderSource = "ccswitch" | "codexplusplus" | "codex-config";
 export type ProviderSource = KnownProviderSource | (string & {});
-export type ViewId = "all" | KnownProviderSource | "status";
+export type ActivityKind = "command" | "file-read" | "file-create" | "file-delete" | "file-modify" | "network" | "risk";
+export type ActivityFilter = "all" | ActivityKind;
 
 export interface DiscoverySourceReport {
   id: string;
@@ -52,6 +53,21 @@ export interface RuntimeState {
   local_proxy_url?: string;
 }
 
+export interface ActivityEvent {
+  id: string;
+  timestamp: string;
+  kind: ActivityKind;
+  title: string;
+  command?: string;
+  paths: string[];
+  severity: Severity;
+  summary: string;
+  line_delta?: number;
+  lines_added?: number;
+  lines_removed?: number;
+  source?: string;
+}
+
 export interface AppInfo {
   version: string;
   install_dir: string;
@@ -63,6 +79,7 @@ export interface AppState {
   app: AppInfo;
   discovery: DiscoveryResult;
   runtime: RuntimeState;
+  activity: ActivityEvent[];
 }
 
 export interface InspectDecision {

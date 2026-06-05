@@ -1,7 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Codex Baoan icon">
-  <rect width="512" height="512" rx="112" fill="#0a7cff"/>
-  <path d="M256 82 386 128v98c0 90-50 161-130 204-80-43-130-114-130-204v-98l130-46Z" fill="#ffffff"/>
-  <path d="M256 124 344 156v73c0 61-33 111-88 144-55-33-88-83-88-144v-73l88-32Z" fill="#101828"/>
-  <path d="M176 270h160v34H176z" fill="#ff6a1a"/>
-  <path d="M238 178h36v160h-36z" fill="#ff6a1a"/>
+  <defs>
+    <linearGradient id="bg" x1="64" y1="32" x2="448" y2="480" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#10131a"/>
+      <stop offset="0.52" stop-color="#20130b"/>
+      <stop offset="1" stop-color="#ff7a1a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="140" cy="92" r="250" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffb56b" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="#ff7a1a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="112" fill="url(#glow)"/>
+  <path d="M153 257 257 153l104 104-104 104L153 257Z" fill="none" stroke="#fff6eb" stroke-width="28" stroke-linejoin="round" opacity=".92"/>
+  <path d="M101 257 205 153l104 104-104 104L101 257Z" fill="none" stroke="#ff8a24" stroke-width="28" stroke-linejoin="round"/>
+  <path d="M203 257 307 153l104 104-104 104L203 257Z" fill="none" stroke="#181b22" stroke-width="28" stroke-linejoin="round"/>
+  <rect x="226" y="226" width="60" height="60" rx="16" fill="#ff8a24"/>
+  <rect x="241" y="241" width="30" height="30" rx="8" fill="#0d0f14"/>
+  <rect x="10" y="10" width="492" height="492" rx="102" fill="none" stroke="white" stroke-opacity=".16" stroke-width="4"/>
 </svg>
