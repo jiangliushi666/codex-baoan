@@ -158,6 +158,7 @@ pub fn run() {
             record_command,
             record_file_event,
             open_install_dir,
+            open_log_dir,
             open_releases,
             open_uninstall_settings
         ])
@@ -255,6 +256,13 @@ fn record_file_event(input: FileEventInput, state: tauri::State<AppRuntime>) -> 
 fn open_install_dir() -> Result<(), String> {
     let dir = install_dir();
     open_path(&dir)
+}
+
+#[tauri::command]
+fn open_log_dir() -> Result<(), String> {
+    let dir = codex_sessions_dir();
+    let target = if dir.exists() { dir } else { dirs::home_dir().unwrap_or_default().join(".codex") };
+    open_path(&target)
 }
 
 #[tauri::command]
@@ -917,6 +925,14 @@ fn evaluate_command(command: &str, mode: GuardMode) -> InspectDecision {
     .unwrap();
     let touches_secret = secret.is_match(command);
 
+    // 访问其他 AI 工具的凭据 / 供应商数据库（如 cc-switch.db，存有本机所有供应商的 Key 与地址）。
+    let cred_store = Regex::new(
+        r"(?i)(cc[-_]switch\.db|[\\/]\.?cc-switch[\\/]|\bsqlite3?\b.*\b(providers?|api[_-]?keys?|secrets?|credentials?|tokens?)\b|keychain)",
+    )
+    .unwrap();
+    let touches_db = cred_store.is_match(command);
+    let sensitive = touches_secret || touches_db;
+
     let is_network = lower.contains("invoke-webrequest")
         || lower.contains("invoke-restmethod")
         || lower.contains("curl ")
@@ -939,11 +955,20 @@ fn evaluate_command(command: &str, mode: GuardMode) -> InspectDecision {
     };
 
     // 严重：把密钥 / 凭据通过网络外传。
-    if touches_secret && is_network {
+    if sensitive && is_network {
         return InspectDecision {
             severity: "critical".into(),
             action: block_action(true),
             message: "疑似把密钥或凭据通过网络外传，需要人工确认。".into(),
+            matched_paths,
+        };
+    }
+    // 高危：读取其他工具的凭据 / 供应商数据库（含本机配置的全部 API Key 与地址）。
+    if touches_db {
+        return InspectDecision {
+            severity: "high".into(),
+            action: "allow".into(),
+            message: "命令访问了其他工具的凭据 / 供应商数据库，可能读取本机配置的 API Key 与地址。".into(),
             matched_paths,
         };
     }
