@@ -7,13 +7,18 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Mutex;
+use std::io::{Read, Seek, SeekFrom};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 use tauri::Manager;
 
 #[derive(Default)]
 struct AppRuntime {
     runtime: Mutex<RuntimeState>,
-    activity: Mutex<Vec<ActivityEvent>>,
+    activity: Arc<Mutex<Vec<ActivityEvent>>>,
+    monitor: Mutex<Option<Arc<AtomicBool>>>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -161,6 +166,19 @@ pub fn run() {
                 window.show()?;
                 window.set_focus()?;
             }
+            // 启动即自动监控当前 Codex 上游（无需手动点击）；用户仍可在界面停止/重启。
+            let state = app.state::<AppRuntime>();
+            let discovery = discover_providers();
+            if let Some(provider) = select_active_provider(&discovery) {
+                if let Ok(mut runtime) = state.runtime.lock() {
+                    runtime.running = true;
+                    runtime.provider_id = Some(provider.id);
+                    runtime.provider_name = Some(provider.name);
+                    runtime.mode = GuardMode::Audit;
+                    runtime.started_at = Some(Utc::now().to_rfc3339());
+                }
+                start_monitor(&state, GuardMode::Audit);
+            }
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -178,19 +196,24 @@ fn start_guard(mode: GuardMode, state: tauri::State<AppRuntime>) -> Result<AppSt
     let provider = select_active_provider(&discovery)
         .ok_or_else(|| "未检测到当前 Codex 上游，请先在 ccswitch、Codex++ 或 Codex 中启用一个供应商。".to_string())?;
 
-    let mut runtime = state.runtime.lock().map_err(|error| error.to_string())?;
-    runtime.running = true;
-    runtime.provider_id = Some(provider.id);
-    runtime.provider_name = Some(provider.name);
-    runtime.mode = mode;
-    runtime.started_at = Some(Utc::now().to_rfc3339());
-    runtime.local_proxy_url = Some("tauri://codex-baoan/local-guard".to_string());
-    drop(runtime);
+    {
+        let mut runtime = state.runtime.lock().map_err(|error| error.to_string())?;
+        runtime.running = true;
+        runtime.provider_id = Some(provider.id);
+        runtime.provider_name = Some(provider.name);
+        runtime.mode = mode;
+        runtime.started_at = Some(Utc::now().to_rfc3339());
+        runtime.local_proxy_url = None;
+    }
+    start_monitor(&state, mode);
     build_state(&state)
 }
 
 #[tauri::command]
 fn stop_guard(state: tauri::State<AppRuntime>) -> Result<AppState, String> {
+    if let Some(flag) = state.monitor.lock().map_err(|error| error.to_string())?.take() {
+        flag.store(true, Ordering::SeqCst);
+    }
     let mut runtime = state.runtime.lock().map_err(|error| error.to_string())?;
     *runtime = RuntimeState::default();
     drop(runtime);
@@ -249,6 +272,165 @@ fn open_uninstall_settings() -> Result<(), String> {
 
     #[cfg(all(unix, not(target_os = "macos")))]
     return open_url("https://github.com/jiangliushi666/codex-baoan/releases/latest");
+}
+
+/// 启动 Codex 会话日志监控线程：tail 最新 rollout-*.jsonl，实时解析其中的 shell 命令。
+fn start_monitor(state: &tauri::State<AppRuntime>, mode: GuardMode) {
+    let mut guard = match state.monitor.lock() {
+        Ok(guard) => guard,
+        Err(_) => return,
+    };
+    if let Some(old) = guard.take() {
+        old.store(true, Ordering::SeqCst);
+    }
+    let stop = Arc::new(AtomicBool::new(false));
+    let activity = Arc::clone(&state.activity);
+    let stop_for_thread = Arc::clone(&stop);
+    thread::spawn(move || monitor_codex(activity, stop_for_thread, mode));
+    *guard = Some(stop);
+}
+
+fn codex_sessions_dir() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".codex")
+        .join("sessions")
+}
+
+/// 在 ~/.codex/sessions 下递归找出最近修改的 rollout 会话日志（即当前活跃会话）。
+fn find_latest_rollout() -> Option<PathBuf> {
+    let mut latest: Option<(std::time::SystemTime, PathBuf)> = None;
+    let mut stack = vec![codex_sessions_dir()];
+    while let Some(dir) = stack.pop() {
+        let entries = match fs::read_dir(&dir) {
+            Ok(entries) => entries,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with("rollout-") && name.ends_with(".jsonl") {
+                if let Ok(modified) = entry.metadata().and_then(|meta| meta.modified()) {
+                    if latest.as_ref().map(|(time, _)| modified > *time).unwrap_or(true) {
+                        latest = Some((modified, path));
+                    }
+                }
+            }
+        }
+    }
+    latest.map(|(_, path)| path)
+}
+
+fn monitor_codex(activity: Arc<Mutex<Vec<ActivityEvent>>>, stop: Arc<AtomicBool>, mode: GuardMode) {
+    let mut current: Option<PathBuf> = None;
+    let mut offset: u64 = 0;
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut tick: u32 = 0;
+    while !stop.load(Ordering::SeqCst) {
+        // 首次以及每隔数秒重新定位最新会话文件（覆盖用户切换会话/新开会话的情况）。
+        if current.is_none() || tick % 5 == 0 {
+            if let Some(latest) = find_latest_rollout() {
+                if current.as_deref() != Some(latest.as_path()) {
+                    current = Some(latest);
+                    offset = 0;
+                    seen.clear();
+                }
+            }
+        }
+        if let Some(path) = current.as_ref() {
+            offset = read_and_emit(path, offset, &mut seen, &activity, mode);
+        }
+        tick = tick.wrapping_add(1);
+        thread::sleep(Duration::from_millis(800));
+    }
+}
+
+/// 从 offset 起读取会话文件的新增完整行，解析出 shell 命令并推入活动列表。返回新的 offset。
+fn read_and_emit(
+    path: &Path,
+    offset: u64,
+    seen: &mut HashSet<String>,
+    activity: &Arc<Mutex<Vec<ActivityEvent>>>,
+    mode: GuardMode,
+) -> u64 {
+    let mut file = match fs::File::open(path) {
+        Ok(file) => file,
+        Err(_) => return offset,
+    };
+    let len = file.metadata().map(|meta| meta.len()).unwrap_or(0);
+    if len <= offset {
+        // 文件被轮转/截断时回到开头，否则保持。
+        return if len < offset { 0 } else { offset };
+    }
+    if file.seek(SeekFrom::Start(offset)).is_err() {
+        return offset;
+    }
+    let mut buf = String::new();
+    if file.read_to_string(&mut buf).is_err() {
+        return offset;
+    }
+    // 只处理以换行结尾的完整行，避免读到正在写入的半行。
+    let last_newline = match buf.rfind('\n') {
+        Some(index) => index,
+        None => return offset,
+    };
+    let complete = &buf[..=last_newline];
+    for line in complete.lines() {
+        if let Some(event) = parse_shell_event(line, mode) {
+            if seen.insert(event.id.clone()) {
+                if let Ok(mut act) = activity.lock() {
+                    act.push(event);
+                    let keep = 500;
+                    if act.len() > keep {
+                        let drop_count = act.len() - keep;
+                        act.drain(0..drop_count);
+                    }
+                }
+            }
+        }
+    }
+    offset + complete.len() as u64
+}
+
+/// 解析一行 rollout 记录：若是 shell 命令调用，复用命令风险分析生成活动事件。
+fn parse_shell_event(line: &str, mode: GuardMode) -> Option<ActivityEvent> {
+    let value: Value = serde_json::from_str(line.trim()).ok()?;
+    let payload = value.get("payload")?;
+    if payload.get("type")?.as_str()? != "function_call" {
+        return None;
+    }
+    let name = payload.get("name").and_then(Value::as_str).unwrap_or("");
+    if !name.contains("shell") && !name.contains("exec") {
+        return None;
+    }
+    let args_raw = payload.get("arguments")?.as_str()?;
+    let args: Value = serde_json::from_str(args_raw).ok()?;
+    let command = match args.get("command")? {
+        Value::String(text) => text.clone(),
+        Value::Array(items) => items.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" "),
+        _ => return None,
+    };
+    if command.trim().is_empty() {
+        return None;
+    }
+    let timestamp = value.get("timestamp").and_then(Value::as_str).unwrap_or("").to_string();
+    let call_id = payload.get("call_id").and_then(Value::as_str).unwrap_or("");
+    let mut event = command_activity_event(&command, mode);
+    event.id = if call_id.is_empty() {
+        format!("codex-{}-{}", timestamp, event.id)
+    } else {
+        format!("codex-{}", call_id)
+    };
+    if !timestamp.is_empty() {
+        event.timestamp = timestamp;
+    }
+    event.source = Some("codex".into());
+    Some(event)
 }
 
 fn build_state(state: &tauri::State<AppRuntime>) -> Result<AppState, String> {
@@ -721,20 +903,91 @@ fn activity_title(kind: &str) -> String {
 }
 
 fn evaluate_command(command: &str, mode: GuardMode) -> InspectDecision {
-    let sensitive = Regex::new(r"(?i)(\.ssh|\.aws|\.env|id_rsa|id_ed25519|\.codex|credentials|private[_-]?key)").unwrap();
-    let path_like = Regex::new(r"(?i)([a-z]:\\[^\s]+|/[A-Za-z0-9_./-]+|\.\.?[/\\][^\s]+)").unwrap();
-    let matched_paths: Vec<String> = path_like.find_iter(command).map(|item| item.as_str().trim_matches(['\"', '\'']).to_string()).collect();
-    if sensitive.is_match(command) {
-        return InspectDecision { severity: "critical".into(), action: if matches!(mode, GuardMode::Block) { "block" } else { "allow" }.into(), message: "命令疑似访问密钥、环境变量或 Codex 凭据。".into(), matched_paths };
-    }
+    let path_like = Regex::new(r#"(?i)([a-z]:\\[^\s"']+|/[A-Za-z0-9_./-]+|\.\.?[/\\][^\s"']+)"#).unwrap();
+    let matched_paths: Vec<String> = path_like
+        .find_iter(command)
+        .map(|item| item.as_str().trim_matches(['\"', '\'']).to_string())
+        .collect();
     let lower = command.to_ascii_lowercase();
-    if lower.contains("invoke-webrequest") || lower.contains("curl ") || lower.contains(" irm ") || lower.contains("wget ") {
-        return InspectDecision { severity: "critical".into(), action: if matches!(mode, GuardMode::Block) { "block" } else { "allow" }.into(), message: "命令包含网络传输行为，需要人工确认。".into(), matched_paths };
+
+    // 只精确匹配真正的密钥 / 凭据文件，避免把 .codex 下的普通配置、skill、md 笔记误判为高危。
+    let secret = Regex::new(
+        r"(?i)(id_rsa|id_ed25519|id_ecdsa|\.ssh[\\/]|\.aws[\\/]credentials|\.codex[\\/](auth\.json|secrets|\.sandbox-secrets)|[\\/]\.env\b|\bcredentials\.(json|txt|ya?ml)|private[_-]?key|\.pem\b|\.pfx\b|\.p12\b)",
+    )
+    .unwrap();
+    let touches_secret = secret.is_match(command);
+
+    let is_network = lower.contains("invoke-webrequest")
+        || lower.contains("invoke-restmethod")
+        || lower.contains("curl ")
+        || lower.contains(" irm ")
+        || lower.contains(" iwr ")
+        || lower.contains("wget ");
+    let is_recursive_delete = lower.contains("rm -rf")
+        || lower.contains("rm -fr")
+        || (lower.contains("remove-item") && lower.contains("-recurse"))
+        || lower.contains("rmdir /s")
+        || lower.contains("rd /s");
+    let is_delete = is_recursive_delete
+        || lower.contains("remove-item")
+        || lower.contains("rm -r ")
+        || lower.contains("del ")
+        || lower.contains("erase ");
+
+    let block_action = |dangerous: bool| {
+        if dangerous && matches!(mode, GuardMode::Block) { "block" } else { "allow" }.to_string()
+    };
+
+    // 严重：把密钥 / 凭据通过网络外传。
+    if touches_secret && is_network {
+        return InspectDecision {
+            severity: "critical".into(),
+            action: block_action(true),
+            message: "疑似把密钥或凭据通过网络外传，需要人工确认。".into(),
+            matched_paths,
+        };
     }
-    if lower.contains("remove-item") || lower.contains("rm -rf") || lower.contains("del ") {
-        return InspectDecision { severity: "high".into(), action: "allow".into(), message: "命令包含删除行为。".into(), matched_paths };
+    // 高危：直接访问密钥 / 凭据文件，或递归删除。
+    if touches_secret {
+        return InspectDecision {
+            severity: "high".into(),
+            action: "allow".into(),
+            message: "命令访问了密钥 / 凭据类文件。".into(),
+            matched_paths,
+        };
     }
-    InspectDecision { severity: "info".into(), action: "allow".into(), message: "命令未命中当前高危规则。".into(), matched_paths }
+    if is_recursive_delete {
+        return InspectDecision {
+            severity: "high".into(),
+            action: block_action(true),
+            message: "命令包含递归删除操作。".into(),
+            matched_paths,
+        };
+    }
+    // 中：网络请求或一般删除，值得留意但通常是正常操作。
+    if is_network {
+        return InspectDecision {
+            severity: "medium".into(),
+            action: "allow".into(),
+            message: "命令包含网络请求。".into(),
+            matched_paths,
+        };
+    }
+    if is_delete {
+        return InspectDecision {
+            severity: "medium".into(),
+            action: "allow".into(),
+            message: "命令包含删除操作。".into(),
+            matched_paths,
+        };
+    }
+    // 其余（读取、搜索、调试、普通命令）不告警。
+    InspectDecision {
+        severity: "info".into(),
+        action: "allow".into(),
+        message: "命令未命中高危规则。".into(),
+        matched_paths,
+    }
 }
 
 fn open_path(path: &Path) -> Result<(), String> {
