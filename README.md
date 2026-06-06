@@ -16,7 +16,27 @@ Tauri 会生成标准桌面安装产物：
 - macOS: `.dmg`
 - Linux: `.AppImage` / `.deb` / `.rpm`
 
-卸载走系统应用管理。Windows 用户可以在应用右侧设置抽屉里点击“卸载入口”，或打开“设置 > 应用 > 已安装的应用”。升级时下载最新 Release 安装包覆盖安装。
+卸载走系统应用管理。Windows 用户可以在应用右侧设置抽屉里点击「卸载入口」，或打开「设置 > 应用 > 已安装的应用」。
+
+### 自动更新
+
+应用内置了自动更新功能：
+
+1. 打开应用，点击右上角「设置」按钮
+2. 在「版本更新」区域点击「检查更新」
+3. 如果有新版本，点击「立即更新」按钮
+4. 更新下载完成后，应用会自动重启到新版本
+
+所有更新包都经过签名验证，确保安全性。开发模式下不会执行应用内更新，可通过下载页手动查看正式版本。
+
+### 维护者发布
+
+正式自动更新依赖 Tauri updater 签名。仓库 Secrets 需要配置与 `src-tauri/tauri.conf.json` 中 `plugins.updater.pubkey` 配对的私钥：
+
+- `TAURI_SIGNING_PRIVATE_KEY`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+
+推送 `v*` tag 后，GitHub Actions 会构建多平台安装包、签名更新产物并上传 `latest.json` 到本次 Release，已安装应用会从 Releases latest endpoint 检查新版本。
 
 ## 开发运行
 
@@ -67,7 +87,6 @@ src-tauri/target/release/bundle/
 
 ## 后续路线
 
-- 接入签名 Tauri updater，发布 `latest.json` 实现应用内升级。
 - 增加本地代理或 CLI wrapper，捕获完整模型响应和工具调用。
 - 对 Codex App 做更深的进程/网络层监控，在可路由路径中执行拦截策略。
 - 引入持久化会话日志，展示清晰的告警时间线。

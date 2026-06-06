@@ -1,9 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import {
   Activity,
   AlertTriangle,
   ArrowUpCircle,
   Check,
+  Download,
   Eye,
   EyeOff,
   FileMinus,
@@ -37,11 +40,10 @@ import ccswitchIcon from "./assets/ccswitch.png";
 
 type Theme = "light" | "dark" | "system";
 type KpiTone = "primary" | "neutral" | "danger" | "calm";
-type UpdateState = { status: "idle" | "checking" | "latest" | "available" | "error"; latest?: string; message?: string };
+type UpdateState = { status: "idle" | "checking" | "latest" | "available" | "downloading" | "error"; latest?: string; message?: string; progress?: number };
 type Settings = { background_run: boolean; silent_start: boolean; autostart: boolean };
 
 const THEME_KEY = "cgx-theme";
-const RELEASE_API = "https://api.github.com/repos/jiangliushi666/codex-baoan/releases/latest";
 
 const emptyState: AppState = {
   app: { version: "0.2.0", install_dir: "", bundle_managed: true, updater_configured: false },
@@ -65,16 +67,6 @@ function readTheme(): Theme {
   if (typeof localStorage === "undefined") return "system";
   const saved = localStorage.getItem(THEME_KEY);
   return saved === "light" || saved === "dark" || saved === "system" ? saved : "system";
-}
-
-function compareVersion(a: string, b: string) {
-  const pa = a.replace(/^v/, "").split(".").map((n) => parseInt(n, 10) || 0);
-  const pb = b.replace(/^v/, "").split(".").map((n) => parseInt(n, 10) || 0);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const diff = (pa[i] || 0) - (pb[i] || 0);
-    if (diff !== 0) return diff > 0 ? 1 : -1;
-  }
-  return 0;
 }
 
 export function App() {
@@ -228,25 +220,54 @@ export function App() {
   }
 
   const checkUpdate = useCallback(async () => {
+    if (!state.app.updater_configured) {
+      setUpdate({ status: "error", message: "开发模式不执行应用内更新，请打开下载页查看正式版本" });
+      return;
+    }
     setUpdate({ status: "checking" });
     try {
-      const res = await fetch(RELEASE_API, { headers: { Accept: "application/vnd.github+json" } });
-      if (res.status === 404) {
-        setUpdate({ status: "latest", message: "暂未发布正式版本" });
+      const upd = await check();
+      if (upd) {
+        setUpdate({ status: "available", latest: upd.version, message: "发现新版本，可直接下载安装" });
+      } else {
+        setUpdate({ status: "latest", latest: state.app.version, message: `已是最新版本 (v${state.app.version})` });
+      }
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : typeof err === "string" ? err : "更新服务暂不可用";
+      setUpdate({ status: "error", message: `检查更新失败：${detail}。可打开下载页手动安装。` });
+    }
+  }, [state.app.updater_configured, state.app.version]);
+
+  const installUpdate = useCallback(async () => {
+    if (!state.app.updater_configured) {
+      setUpdate({ status: "error", message: "开发模式不执行应用内更新，请打开下载页查看正式版本" });
+      return;
+    }
+    setUpdate((current) => ({ ...current, status: "downloading", progress: 0 }));
+    try {
+      const upd = await check();
+      if (!upd) {
+        setUpdate({ status: "latest", latest: state.app.version, message: `已是最新版本 (v${state.app.version})` });
         return;
       }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = (await res.json()) as { tag_name?: string };
-      const latest = (data.tag_name || "").replace(/^v/, "");
-      if (latest && compareVersion(latest, state.app.version) > 0) {
-        setUpdate({ status: "available", latest });
-      } else {
-        setUpdate({ status: "latest", latest: latest || state.app.version });
-      }
-    } catch {
-      setUpdate({ status: "error", message: "检查失败，请检查网络连接" });
+      let total = 0;
+      let done = 0;
+      await upd.downloadAndInstall((event) => {
+        if (event.event === "Started") {
+          total = event.data.contentLength ?? 0;
+        } else if (event.event === "Progress") {
+          done += event.data.chunkLength;
+          setUpdate({ status: "downloading", latest: upd.version, progress: total ? Math.min(100, Math.round((done / total) * 100)) : 0 });
+        } else if (event.event === "Finished") {
+          setUpdate({ status: "downloading", latest: upd.version, progress: 100, message: "更新已安装，正在重启…" });
+        }
+      });
+      await relaunch();
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : typeof err === "string" ? err : "更新下载或安装失败";
+      setUpdate({ status: "error", message: `${detail}。可打开下载页手动安装。` });
     }
-  }, [state.app.version]);
+  }, [state.app.updater_configured, state.app.version]);
 
   async function updateSetting(patch: Partial<Settings>) {
     const next = { ...settings, ...patch };
@@ -476,20 +497,32 @@ export function App() {
                   <small>
                     {update.status === "checking" && "正在检查最新版本…"}
                     {update.status === "latest" && (update.message || `已是最新版本${update.latest ? ` (v${update.latest})` : ""}`)}
-                    {update.status === "available" && `发现新版本 v${update.latest}`}
-                    {update.status === "error" && (update.message || "检查失败")}
-                    {update.status === "idle" && "点击检查是否有新版本"}
+                    {update.status === "available" && (update.message || `发现新版本 v${update.latest}`)}
+                    {update.status === "downloading" && (update.message || `正在下载并安装 ${update.progress ?? 0}%，完成后将自动重启…`)}
+                    {update.status === "error" && (update.message || "检查失败，可打开下载页手动安装")}
+                    {update.status === "idle" && (state.app.updater_configured ? "应用内更新已启用，点击检查新版本" : "开发模式使用 GitHub Releases 下载页")}
                   </small>
                 </div>
                 {update.status === "available" ? (
-                  <button className="btn btn--primary btn--sm" onClick={() => runManaged("update", `正在前往 v${update.latest} 下载页`, () => invoke("open_releases"))}>
-                    <ArrowUpCircle size={15} /> 更新到 v{update.latest}
+                  <button className="btn btn--primary btn--sm" onClick={installUpdate}>
+                    <ArrowUpCircle size={15} /> 立即更新 v{update.latest}
+                  </button>
+                ) : update.status === "downloading" ? (
+                  <button className="btn btn--primary btn--sm" disabled>
+                    <Download size={14} className="spin" /> 下载中 {update.progress ?? 0}%
                   </button>
                 ) : (
-                  <button className="btn btn--soft btn--sm" disabled={update.status === "checking"} onClick={checkUpdate}>
-                    {update.status === "checking" ? <Loader2 size={14} className="spin" /> : update.status === "latest" ? <Check size={14} /> : <RefreshCw size={14} />}
-                    {update.status === "checking" ? "检查中" : update.status === "latest" ? "已最新" : "检查更新"}
-                  </button>
+                  <div className="updateCard__actions">
+                    <button className="btn btn--soft btn--sm" disabled={update.status === "checking"} onClick={checkUpdate}>
+                      {update.status === "checking" ? <Loader2 size={14} className="spin" /> : update.status === "latest" ? <Check size={14} /> : <RefreshCw size={14} />}
+                      {update.status === "checking" ? "检查中" : update.status === "latest" ? "已最新" : "检查更新"}
+                    </button>
+                    {update.status === "error" && (
+                      <button className="btn btn--soft btn--sm" onClick={() => runManaged("update", "正在打开下载页", () => invoke("open_releases"))}>
+                        <ArrowUpCircle size={14} /> 下载页
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </section>

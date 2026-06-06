@@ -179,6 +179,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--silent"]),
         ))
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppRuntime::default())
         .invoke_handler(tauri::generate_handler![
             get_state,
@@ -563,11 +564,13 @@ fn build_state(state: &tauri::State<AppRuntime>) -> Result<AppState, String> {
 }
 
 fn app_info() -> AppInfo {
+    let bundle_managed = cfg!(not(debug_assertions));
     AppInfo {
         version: env!("CARGO_PKG_VERSION").to_string(),
         install_dir: install_dir().display().to_string(),
-        bundle_managed: cfg!(not(debug_assertions)),
-        updater_configured: false,
+        bundle_managed,
+        // Tauri updater only works for signed release bundles. In dev builds the UI falls back to GitHub Releases.
+        updater_configured: bundle_managed,
     }
 }
 

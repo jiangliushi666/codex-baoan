@@ -32,6 +32,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "category": "DeveloperTool",
     "copyright": "MIT © jiangliushi666",
@@ -52,6 +53,14 @@
         "displayLanguageSelector": false,
         "installerIcon": "icons/icon.ico"
       }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/jiangliushi666/codex-baoan/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDYwQTkxNkM1RUVBMDU2NTQKUldSVVZxRHV4UmFwWU0rcGNXL1NFMFR1dzRpVjZSNHlRQ0xST09mSTRIZWR4Y1ViOEpvRkNud1IK"
     }
   }
 }

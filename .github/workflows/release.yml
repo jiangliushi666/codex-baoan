@@ -47,17 +47,17 @@ jobs:
       - name: Typecheck
         run: pnpm run typecheck
 
-      - name: Build Tauri bundles
-        run: pnpm tauri build
-
-      - name: Upload installer artifacts
-        uses: actions/upload-artifact@v4
+      # tauri-action 会构建各平台安装包，用签名私钥生成 .sig，
+      # 并生成 / 上传 updater 用的 latest.json 到本次 Release。
+      - name: Build & release (signed updater artifacts)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          name: codex-baoan-${{ matrix.platform }}
-          path: src-tauri/target/release/bundle/**
-
-      - name: Attach installers to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: src-tauri/target/release/bundle/**/*
+          tagName: ${{ github.ref_name }}
+          releaseName: "Codex 保安 v__VERSION__"
+          releaseBody: "自动构建发布。已安装的应用可在「设置 → 版本更新」直接检查并安装此版本。"
+          releaseDraft: false
+          prerelease: false
