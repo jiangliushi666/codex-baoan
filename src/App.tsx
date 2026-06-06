@@ -5,6 +5,7 @@ import {
   ArrowUpCircle,
   Check,
   Eye,
+  EyeOff,
   FileMinus,
   FilePen,
   FilePlus,
@@ -13,9 +14,11 @@ import {
   Globe,
   Layers,
   Loader2,
+  Minimize2,
   Monitor,
   Moon,
   Play,
+  Power,
   RefreshCw,
   Search,
   Settings,
@@ -35,6 +38,7 @@ import ccswitchIcon from "./assets/ccswitch.png";
 type Theme = "light" | "dark" | "system";
 type KpiTone = "primary" | "neutral" | "danger" | "calm";
 type UpdateState = { status: "idle" | "checking" | "latest" | "available" | "error"; latest?: string; message?: string };
+type Settings = { background_run: boolean; silent_start: boolean; autostart: boolean };
 
 const THEME_KEY = "cgx-theme";
 const RELEASE_API = "https://api.github.com/repos/jiangliushi666/codex-baoan/releases/latest";
@@ -81,6 +85,7 @@ export function App() {
   const [mode] = useState<GuardMode>("audit");
   const [theme, setTheme] = useState<Theme>(readTheme);
   const [update, setUpdate] = useState<UpdateState>({ status: "idle" });
+  const [settings, setSettings] = useState<Settings>({ background_run: true, silent_start: false, autostart: false });
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -243,6 +248,17 @@ export function App() {
     }
   }, [state.app.version]);
 
+  async function updateSetting(patch: Partial<Settings>) {
+    const next = { ...settings, ...patch };
+    setSettings(next);
+    try {
+      const applied = await invoke<Settings>("set_settings", next);
+      setSettings(applied);
+    } catch (err) {
+      fail(err);
+    }
+  }
+
   const closeSettings = useCallback(() => {
     setSettingsOpen(false);
     window.setTimeout(() => settingsButtonRef.current?.focus(), 0);
@@ -292,6 +308,7 @@ export function App() {
   useEffect(() => {
     if (!settingsOpen) return;
     if (update.status === "idle") checkUpdate();
+    invoke<Settings>("get_settings").then(setSettings).catch(() => {});
     window.setTimeout(() => drawerCloseRef.current?.focus(), 0);
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -442,6 +459,15 @@ export function App() {
               </div>
             </div>
 
+            <div className="field">
+              <span className="railLabel">运行设置</span>
+              <div className="settingGroup">
+                <Toggle checked={settings.background_run} onChange={(v) => updateSetting({ background_run: v })} icon={<Minimize2 size={16} />} label="后台运行" hint="关闭窗口时最小化到托盘，监控继续运行" />
+                <Toggle checked={settings.autostart} onChange={(v) => updateSetting({ autostart: v })} icon={<Power size={16} />} label="开机自启动" hint="开机时自动启动 Codex 保安" />
+                <Toggle checked={settings.silent_start} onChange={(v) => updateSetting({ silent_start: v })} icon={<EyeOff size={16} />} label="开机静默启动" hint="开机自启时不弹窗，直接在后台监控（需先开启自启）" />
+              </div>
+            </div>
+
             <section className="updateCard">
               <div className="updateCard__row">
                 <div className="updateCard__info">
@@ -577,6 +603,19 @@ function Kpi({ tone, icon, label, value, detail, active, onClick }: { tone: KpiT
         <strong className="kpi__value">{value}</strong>
         <small className="kpi__detail">{detail}</small>
       </span>
+    </button>
+  );
+}
+
+function Toggle({ checked, onChange, icon, label, hint }: { checked: boolean; onChange: (value: boolean) => void; icon: React.ReactNode; label: string; hint: string }) {
+  return (
+    <button className={["settingRow", checked ? "is-on" : ""].join(" ")} role="switch" aria-checked={checked} onClick={() => onChange(!checked)}>
+      <span className="settingRow__icon" aria-hidden="true">{icon}</span>
+      <span className="settingRow__text">
+        <strong>{label}</strong>
+        <small>{hint}</small>
+      </span>
+      <span className="toggle" aria-hidden="true"><span className="toggle__knob" /></span>
     </button>
   );
 }
