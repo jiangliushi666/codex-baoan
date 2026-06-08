@@ -4,8 +4,12 @@
   "description": "Codex 保安: Tauri desktop guard for Codex provider monitoring.",
   "type": "module",
   "scripts": {
-    "dev": "pnpm run build:renderer && pnpm tauri dev",
-    "build": "pnpm tauri build",
+    "dev": "vite build && tauri dev",
+    "build": "tauri build",
+    "build:windows": "tauri build --bundles msi,nsis",
+    "build:windows:unsigned": "tauri build --bundles msi,nsis --config \"{\\\"bundle\\\":{\\\"createUpdaterArtifacts\\\":false}}\"",
+    "package:windows": "tsc --noEmit && tauri build --bundles msi,nsis",
+    "package:windows:unsigned": "tsc --noEmit && tauri build --bundles msi,nsis --config \"{\\\"bundle\\\":{\\\"createUpdaterArtifacts\\\":false}}\"",
     "tauri": "tauri",
     "build:renderer": "vite build",
     "typecheck": "tsc --noEmit"

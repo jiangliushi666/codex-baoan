@@ -7,6 +7,7 @@ import {
   ArrowUpCircle,
   Check,
   Download,
+  ExternalLink,
   Eye,
   EyeOff,
   FileMinus,
@@ -46,7 +47,7 @@ type Settings = { background_run: boolean; silent_start: boolean; autostart: boo
 const THEME_KEY = "cgx-theme";
 
 const emptyState: AppState = {
-  app: { version: "0.2.0", install_dir: "", bundle_managed: true, updater_configured: false },
+  app: { version: "0.2.0", install_dir: "", bundle_managed: false, updater_configured: false, portable_mode: false },
   discovery: { generated_at: "", providers: [], sources: [], manual_fallback_reason: "正在读取本机配置…" },
   runtime: { running: false, mode: "audit" },
   activity: []
@@ -90,6 +91,7 @@ export function App() {
   const toastTimerRef = useRef<number | null>(null);
   const railRef = useRef<HTMLElement>(null);
   const stageRef = useRef<HTMLElement>(null);
+  const updateAutoCheckRef = useRef(false);
 
   const activeUpstream = useMemo(
     () => state.discovery.providers.find((item) => item.id === state.discovery.recommended_provider_id) || state.discovery.providers[0],
@@ -221,12 +223,15 @@ export function App() {
 
   const checkUpdate = useCallback(async () => {
     if (!state.app.updater_configured) {
-      setUpdate({ status: "error", message: "开发模式不执行应用内更新，请打开下载页查看正式版本" });
+      setUpdate({
+        status: "error",
+        message: state.app.portable_mode ? "当前为便携版，应用内更新不可用，请打开下载页下载安装包" : "开发模式不执行应用内更新，请打开下载页查看正式版本"
+      });
       return;
     }
     setUpdate({ status: "checking" });
     try {
-      const upd = await check();
+      const upd = await check({ timeout: 30000 });
       if (upd) {
         setUpdate({ status: "available", latest: upd.version, message: "发现新版本，可直接下载安装" });
       } else {
@@ -236,16 +241,19 @@ export function App() {
       const detail = err instanceof Error ? err.message : typeof err === "string" ? err : "更新服务暂不可用";
       setUpdate({ status: "error", message: `检查更新失败：${detail}。可打开下载页手动安装。` });
     }
-  }, [state.app.updater_configured, state.app.version]);
+  }, [state.app.portable_mode, state.app.updater_configured, state.app.version]);
 
   const installUpdate = useCallback(async () => {
     if (!state.app.updater_configured) {
-      setUpdate({ status: "error", message: "开发模式不执行应用内更新，请打开下载页查看正式版本" });
+      setUpdate({
+        status: "error",
+        message: state.app.portable_mode ? "当前为便携版，应用内更新不可用，请打开下载页下载安装包" : "开发模式不执行应用内更新，请打开下载页查看正式版本"
+      });
       return;
     }
     setUpdate((current) => ({ ...current, status: "downloading", progress: 0 }));
     try {
-      const upd = await check();
+      const upd = await check({ timeout: 30000 });
       if (!upd) {
         setUpdate({ status: "latest", latest: state.app.version, message: `已是最新版本 (v${state.app.version})` });
         return;
@@ -267,15 +275,17 @@ export function App() {
       const detail = err instanceof Error ? err.message : typeof err === "string" ? err : "更新下载或安装失败";
       setUpdate({ status: "error", message: `${detail}。可打开下载页手动安装。` });
     }
-  }, [state.app.updater_configured, state.app.version]);
+  }, [state.app.portable_mode, state.app.updater_configured, state.app.version]);
 
   async function updateSetting(patch: Partial<Settings>) {
+    const previous = settings;
     const next = { ...settings, ...patch };
     setSettings(next);
     try {
       const applied = await invoke<Settings>("set_settings", next);
       setSettings(applied);
     } catch (err) {
+      setSettings(previous);
       fail(err);
     }
   }
@@ -288,6 +298,15 @@ export function App() {
   useEffect(() => {
     refresh().catch(fail);
   }, [fail, refresh]);
+
+  useEffect(() => {
+    if (loading || updateAutoCheckRef.current || !state.app.updater_configured) return;
+    updateAutoCheckRef.current = true;
+    const timer = window.setTimeout(() => {
+      checkUpdate().catch(fail);
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [checkUpdate, fail, loading, state.app.updater_configured]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -500,7 +519,12 @@ export function App() {
                     {update.status === "available" && (update.message || `发现新版本 v${update.latest}`)}
                     {update.status === "downloading" && (update.message || `正在下载并安装 ${update.progress ?? 0}%，完成后将自动重启…`)}
                     {update.status === "error" && (update.message || "检查失败，可打开下载页手动安装")}
-                    {update.status === "idle" && (state.app.updater_configured ? "应用内更新已启用，点击检查新版本" : "开发模式使用 GitHub Releases 下载页")}
+                    {update.status === "idle" &&
+                      (state.app.updater_configured
+                        ? "应用启动后会自动检查一次，也可手动检查新版本"
+                        : state.app.portable_mode
+                          ? "便携版使用下载页手动更新"
+                          : "开发模式使用 GitHub Releases 下载页")}
                   </small>
                 </div>
                 {update.status === "available" ? (
@@ -517,13 +541,27 @@ export function App() {
                       {update.status === "checking" ? <Loader2 size={14} className="spin" /> : update.status === "latest" ? <Check size={14} /> : <RefreshCw size={14} />}
                       {update.status === "checking" ? "检查中" : update.status === "latest" ? "已最新" : "检查更新"}
                     </button>
-                    {update.status === "error" && (
-                      <button className="btn btn--soft btn--sm" onClick={() => runManaged("update", "正在打开下载页", () => invoke("open_releases"))}>
-                        <ArrowUpCircle size={14} /> 下载页
-                      </button>
-                    )}
+                    <button className="btn btn--soft btn--sm" onClick={() => runManaged("update", "已打开下载页", () => invoke("open_releases"))}>
+                      <ExternalLink size={14} /> 下载页
+                    </button>
                   </div>
                 )}
+              </div>
+            </section>
+
+            <section className="installCard">
+              <div className="installCard__head">
+                <span className="railLabel">安装管理</span>
+                <strong>{state.app.portable_mode ? "便携版" : state.app.bundle_managed ? "安装版" : "开发运行"}</strong>
+                <small title={state.app.install_dir}>{state.app.install_dir || "未检测到安装目录"}</small>
+              </div>
+              <div className="installCard__actions">
+                <button className="btn btn--soft btn--sm" onClick={() => runManaged("install-dir", "已打开安装目录", () => invoke("open_install_dir"))} disabled={managementBusy !== null}>
+                  {managementBusy === "install-dir" ? <Loader2 size={14} className="spin" /> : <FolderOpen size={14} />} 安装目录
+                </button>
+                <button className="btn btn--soft btn--sm" onClick={() => runManaged("uninstall", "已打开系统卸载设置", () => invoke("open_uninstall_settings"))} disabled={managementBusy !== null}>
+                  <Trash2 size={14} /> 卸载
+                </button>
               </div>
             </section>
 

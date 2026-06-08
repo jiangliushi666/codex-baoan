@@ -12,9 +12,9 @@ https://github.com/jiangliushi666/codex-baoan/releases/latest
 
 Tauri 会生成标准桌面安装产物：
 
-- Windows: `.exe` / `.msi`
-- macOS: `.dmg`
-- Linux: `.AppImage` / `.deb` / `.rpm`
+- Windows MSI 安装版：推荐使用，安装到用户目录，支持开始菜单、卸载项和应用内更新
+- Windows NSIS 安装器：备用安装入口
+- Windows Portable 便携版：解压即用，不参与应用内自动更新
 
 卸载走系统应用管理。Windows 用户可以在应用右侧设置抽屉里点击「卸载入口」，或打开「设置 > 应用 > 已安装的应用」。
 
@@ -27,7 +27,7 @@ Tauri 会生成标准桌面安装产物：
 3. 如果有新版本，点击「立即更新」按钮
 4. 更新下载完成后，应用会自动重启到新版本
 
-所有更新包都经过签名验证，确保安全性。开发模式下不会执行应用内更新，可通过下载页手动查看正式版本。
+所有更新包都经过签名验证，确保安全性。开发模式和 Portable 便携版不会执行应用内更新，可通过下载页手动安装正式版本。
 
 ### 维护者发布
 
@@ -36,7 +36,7 @@ Tauri 会生成标准桌面安装产物：
 - `TAURI_SIGNING_PRIVATE_KEY`
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
 
-推送 `v*` tag 后，GitHub Actions 会构建多平台安装包、签名更新产物并上传 `latest.json` 到本次 Release，已安装应用会从 Releases latest endpoint 检查新版本。
+推送 `v*` tag 后，GitHub Actions 会构建 Windows MSI/NSIS/Portable 产物、签名 MSI 更新包并上传 `latest.json` 到本次 Release。已安装的 MSI 版本会从 Releases latest endpoint 检查并安装新版本。
 
 ## 开发运行
 
@@ -56,8 +56,10 @@ pnpm run typecheck
 构建安装包：
 
 ```bash
-pnpm tauri build
+pnpm run package:windows:unsigned
 ```
+
+正式发布使用 `pnpm run package:windows`，需要设置 `TAURI_SIGNING_PRIVATE_KEY` 以生成应用内更新签名。
 
 本地构建产物会出现在：
 
@@ -84,6 +86,10 @@ src-tauri/target/release/bundle/
 - 命令风险规则：识别密钥目录、环境文件、网络传输、删除命令等高危行为，并按等级标记告警。
 - 应用管理：打开安装包页面、检查升级、打开安装目录、打开系统卸载入口。
 - Tauri 打包：标准安装 / 卸载由系统安装器负责。
+
+## 设计风格
+
+项目的界面风格沉淀在 [DESIGN_STYLE.md](./DESIGN_STYLE.md)，后续扩展页面、组件或宣传物料时优先按这份规范保持一致。
 
 ## 后续路线
 

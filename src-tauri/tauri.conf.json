@@ -5,7 +5,7 @@
   "identifier": "com.codexbaoan.desktop",
   "build": {
     "frontendDist": "../dist",
-    "beforeBuildCommand": "pnpm run build:renderer"
+    "beforeBuildCommand": "vite build"
   },
   "app": {
     "windows": [
@@ -33,7 +33,7 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
-    "targets": "all",
+    "targets": ["msi", "nsis"],
     "category": "DeveloperTool",
     "copyright": "MIT © jiangliushi666",
     "shortDescription": "Codex desktop guard",
@@ -51,7 +51,10 @@
       },
       "nsis": {
         "displayLanguageSelector": false,
-        "installerIcon": "icons/icon.ico"
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "installMode": "currentUser",
+        "startMenuFolder": "Codex Baoan"
       }
     }
   },

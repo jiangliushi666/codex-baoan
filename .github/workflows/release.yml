@@ -1,4 +1,4 @@
-name: release
+name: Release
 
 on:
   workflow_dispatch:
@@ -9,55 +9,154 @@ on:
 permissions:
   contents: write
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
-  build:
-    name: build (${{ matrix.platform }})
-    runs-on: ${{ matrix.platform }}
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [windows-latest, macos-latest, ubuntu-22.04]
+  windows:
+    name: Windows installer
+    runs-on: windows-2022
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
           version: 11
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 20
           cache: pnpm
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
-
-      - name: Install frontend dependencies
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck
         run: pnpm run typecheck
 
-      # tauri-action 会构建各平台安装包，用签名私钥生成 .sig，
-      # 并生成 / 上传 updater 用的 latest.json 到本次 Release。
-      - name: Build & release (signed updater artifacts)
-        uses: tauri-apps/tauri-action@v0
+      - name: Validate release tag
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF_TYPE -ne "tag" -or $env:GITHUB_REF_NAME -notmatch '^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$') {
+            throw "Release workflow must run on a vX.Y.Z tag, not '$($env:GITHUB_REF_NAME)'."
+          }
+
+      - name: Validate updater signing key
+        shell: pwsh
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            throw "TAURI_SIGNING_PRIVATE_KEY secret is required to create signed updater artifacts."
+          }
+
+      - name: Build Windows installers
+        shell: pwsh
+        env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: pnpm run build:windows
+
+      - name: Collect release assets
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tag = $env:GITHUB_REF_NAME
+          $version = $tag.TrimStart("v")
+          $repo = $env:GITHUB_REPOSITORY
+          $baseUrl = "https://github.com/$repo/releases/download/$tag"
+          $pubDate = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+          New-Item -ItemType Directory -Force -Path release-assets | Out-Null
+
+          $msi = Get-ChildItem -Path "src-tauri/target/release/bundle/msi" -Recurse -Filter "*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -eq $msi) {
+            throw "No MSI installer was produced."
+          }
+          $msiName = "Codex-Baoan-$tag-Windows.msi"
+          Copy-Item $msi.FullName (Join-Path "release-assets" $msiName)
+
+          $msiSig = "$($msi.FullName).sig"
+          if (!(Test-Path $msiSig)) {
+            throw "No updater signature found for MSI. Check TAURI_SIGNING_PRIVATE_KEY."
+          }
+          $msiSigName = "$msiName.sig"
+          Copy-Item $msiSig (Join-Path "release-assets" $msiSigName)
+
+          $nsis = Get-ChildItem -Path "src-tauri/target/release/bundle/nsis" -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -eq $nsis) {
+            throw "No NSIS installer was produced."
+          }
+          $nsisName = "Codex-Baoan-$tag-Windows-Setup.exe"
+          Copy-Item $nsis.FullName (Join-Path "release-assets" $nsisName)
+          $nsisSig = "$($nsis.FullName).sig"
+          if (!(Test-Path $nsisSig)) {
+            throw "No updater signature found for NSIS. Check TAURI_SIGNING_PRIVATE_KEY."
+          }
+          $nsisSigName = "$nsisName.sig"
+          Copy-Item $nsisSig (Join-Path "release-assets" $nsisSigName)
+
+          $exe = Get-ChildItem -Path "src-tauri/target/release" -Filter "codex-baoan.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -ne $exe) {
+            $portableDir = "release-assets/Codex-Baoan-Portable"
+            New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
+            Copy-Item $exe.FullName $portableDir
+            @(
+              "# Codex Baoan portable build marker",
+              "portable=true"
+            ) | Set-Content -Path (Join-Path $portableDir "portable.ini") -Encoding UTF8
+            Compress-Archive -Path "$portableDir/*" -DestinationPath "release-assets/Codex-Baoan-$tag-Windows-Portable.zip" -Force
+            Remove-Item -Recurse -Force $portableDir
+          }
+
+          $msiSignature = (Get-Content -LiteralPath (Join-Path "release-assets" $msiSigName) -Raw).Trim()
+          $nsisSignature = (Get-Content -LiteralPath (Join-Path "release-assets" $nsisSigName) -Raw).Trim()
+          $latest = [ordered]@{
+            version = $version
+            notes = "Release $tag"
+            pub_date = $pubDate
+            platforms = [ordered]@{
+              "windows-x86_64-msi" = [ordered]@{
+                signature = $msiSignature
+                url = "$baseUrl/$msiName"
+              }
+              "windows-x86_64-nsis" = [ordered]@{
+                signature = $nsisSignature
+                url = "$baseUrl/$nsisName"
+              }
+              "windows-x86_64" = [ordered]@{
+                signature = $msiSignature
+                url = "$baseUrl/$msiName"
+              }
+            }
+          }
+          $latest | ConvertTo-Json -Depth 8 | Set-Content -Path "release-assets/latest.json" -Encoding UTF8
+
+          Get-ChildItem release-assets | Format-Table Name, Length
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Codex 保安 v__VERSION__"
-          releaseBody: "自动构建发布。已安装的应用可在「设置 → 版本更新」直接检查并安装此版本。"
-          releaseDraft: false
+          tag_name: ${{ github.ref_name }}
+          name: Codex 保安 ${{ github.ref_name }}
+          draft: false
           prerelease: false
+          files: release-assets/*
+          body: |
+            ## Codex 保安 ${{ github.ref_name }}
+
+            ### Windows 下载
+
+            - `Codex-Baoan-${{ github.ref_name }}-Windows.msi`: 推荐安装版，支持开始菜单、卸载项和应用内更新。
+            - `Codex-Baoan-${{ github.ref_name }}-Windows-Setup.exe`: NSIS 安装器。
+            - `Codex-Baoan-${{ github.ref_name }}-Windows-Portable.zip`: 便携版，不参与应用内自动更新。
+
+            `latest.json` 和 `.sig` 文件用于 Tauri 应用内更新，请保留在 Release 资产中。

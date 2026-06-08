@@ -73,6 +73,7 @@ export interface AppInfo {
   install_dir: string;
   bundle_managed: boolean;
   updater_configured: boolean;
+  portable_mode: boolean;
 }
 
 export interface AppState {

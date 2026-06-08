@@ -408,6 +408,11 @@ code { font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, m
 .updateCard__info strong { font-size: 14px; font-weight: 700; }
 .updateCard__info small { color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 1.4; }
 .updateCard__actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.installCard { display: grid; gap: 12px; padding: 14px; border-radius: 12px; background: hsl(var(--muted) / 0.5); border: 1px solid hsl(var(--border)); }
+.installCard__head { display: grid; gap: 2px; min-width: 0; }
+.installCard__head strong { font-size: 14px; font-weight: 700; }
+.installCard__head small { color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.installCard__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .logDirRow { width: 100%; text-align: left; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; background: hsl(var(--muted) / 0.5); border: 1px solid hsl(var(--border)); cursor: pointer; transition: background 140ms ease, border-color 140ms ease; }
 .logDirRow:hover { background: hsl(var(--card-hover)); border-color: hsl(var(--border-strong)); }
 .logDirRow:disabled { opacity: 0.6; cursor: not-allowed; }
