@@ -47,7 +47,7 @@ type Settings = { background_run: boolean; silent_start: boolean; autostart: boo
 const THEME_KEY = "cgx-theme";
 
 const emptyState: AppState = {
-  app: { version: "0.2.0", install_dir: "", bundle_managed: false, updater_configured: false, portable_mode: false },
+  app: { version: "0.2.1", install_dir: "", bundle_managed: false, updater_configured: false, portable_mode: false },
   discovery: { generated_at: "", providers: [], sources: [], manual_fallback_reason: "正在读取本机配置…" },
   runtime: { running: false, mode: "audit" },
   activity: []
