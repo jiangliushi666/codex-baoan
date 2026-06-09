@@ -3,6 +3,7 @@
   "version": "0.2.2",
   "description": "Codex 保安: Tauri desktop guard for Codex provider monitoring.",
   "type": "module",
+  "packageManager": "pnpm@9.15.9",
   "scripts": {
     "dev": "vite build && tauri dev",
     "build": "tauri build",

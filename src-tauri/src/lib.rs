@@ -989,7 +989,7 @@ fn command_activity_event(command: &str, mode: GuardMode) -> ActivityEvent {
         timestamp: Utc::now().to_rfc3339(),
         kind: kind.into(),
         title,
-        command: Some(command.to_string()),
+        command: Some(redact_command(command)),
         paths: decision.matched_paths.clone(),
         severity: decision.severity,
         summary: decision.message,
@@ -998,6 +998,23 @@ fn command_activity_event(command: &str, mode: GuardMode) -> ActivityEvent {
         lines_removed: None,
         source: Some("command".into()),
     }
+}
+
+fn redact_command(command: &str) -> String {
+    let mut redacted = command.to_string();
+    let rules = [
+        r#"(?i)((?:authorization|x-api-key|api-key|apikey|openai-api-key|anthropic-api-key)\s*:\s*(?:bearer|token|basic)?\s*)[^\s"'`\\;|)]+"#,
+        r#"(?i)(\bbearer\s+)[^\s"'`\\;|)]+"#,
+        r#"(?i)(\$env:[A-Z0-9_]*(?:API[_-]?KEY|TOKEN|SECRET|PASSWORD|PASSWD|PWD)[A-Z0-9_]*\s*=\s*)("[^"]*"|'[^']*'|[^\s"'`;&|]+)"#,
+        r#"(?i)\b([A-Z0-9_]*(?:API[_-]?KEY|TOKEN|SECRET|PASSWORD|PASSWD|PWD)[A-Z0-9_]*\s*=\s*)("[^"]*"|'[^']*'|[^\s"'`;&|]+)"#,
+        r#"(?i)([?&](?:api[_-]?key|access[_-]?token|token|password|passwd|secret|key)=)[^&\s"'`\\;|)]+"#,
+        r#"(?i)(--(?:api[_-]?key|token|password|secret)(?:=|\s+))("[^"]*"|'[^']*'|[^\s"'`;&|]+)"#,
+    ];
+    for rule in rules {
+        let regex = Regex::new(rule).unwrap();
+        redacted = regex.replace_all(&redacted, "${1}[REDACTED]").into_owned();
+    }
+    redacted
 }
 
 fn file_activity_event(input: FileEventInput) -> ActivityEvent {
@@ -1334,5 +1351,40 @@ mod tests {
         assert_eq!(sev("rg TODO src/"), "info");
         // "codex-guard" 目录名里的 codex 不应触发 AI 工具规则
         assert_eq!(sev(r"type F:\vibe\codex-guard\tsconfig.json"), "info");
+    }
+
+    #[test]
+    fn command_storage_redacts_secrets_but_keeps_risk_decision() {
+        let command = r#"OPENAI_API_KEY=sk-env curl -H "Authorization: Bearer sk-header" --api-key sk-flag "https://api.example.test/v1/models?api_key=sk-query&token=tok-query" ~/.codex/config.toml"#;
+        let event = command_activity_event(command, GuardMode::Audit);
+        let stored = event.command.expect("command should be stored");
+
+        assert_eq!(event.severity, "critical");
+        assert!(!stored.contains("sk-env"));
+        assert!(!stored.contains("sk-header"));
+        assert!(!stored.contains("sk-flag"));
+        assert!(!stored.contains("sk-query"));
+        assert!(!stored.contains("tok-query"));
+        assert!(stored.contains("OPENAI_API_KEY=[REDACTED]"));
+        assert!(stored.contains("Authorization: Bearer [REDACTED]"));
+        assert!(stored.contains("--api-key [REDACTED]"));
+        assert!(stored.contains("api_key=[REDACTED]"));
+        assert!(stored.contains("token=[REDACTED]"));
+    }
+
+    #[test]
+    fn redacts_powershell_env_headers_and_query_credentials() {
+        let stored = redact_command(
+            r#"$env:ANTHROPIC_API_KEY='sk-ant'; Invoke-WebRequest -Headers @{Authorization='Bearer sk-bearer'} "https://example.test/upload?password=pw123&access_token=tok123""#,
+        );
+
+        assert!(!stored.contains("sk-ant"));
+        assert!(!stored.contains("sk-bearer"));
+        assert!(!stored.contains("pw123"));
+        assert!(!stored.contains("tok123"));
+        assert!(stored.contains("$env:ANTHROPIC_API_KEY=[REDACTED]"));
+        assert!(stored.contains("Bearer [REDACTED]"));
+        assert!(stored.contains("password=[REDACTED]"));
+        assert!(stored.contains("access_token=[REDACTED]"));
     }
 }
